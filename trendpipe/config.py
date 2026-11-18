@@ -1,0 +1,132 @@
+"""Ayar dosyası (YAML) ve ortam değişkenlerini (.env) okur."""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from datetime import date, timedelta
+from pathlib import Path
+
+import yaml
+
+from .models import Term
+
+try:  # .env opsiyonel
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    load_dotenv = None
+
+
+class ConfigError(ValueError):
+    pass
+
+
+@dataclass
+class Window:
+    """Analiz penceresi: [baseline_start .. baseline_end] + [recent_start .. recent_end]."""
+
+    baseline_start: date
+    baseline_end: date
+    recent_start: date
+    recent_end: date
+
+    @property
+    def start(self) -> date:
+        return self.baseline_start
+
+    @property
+    def end(self) -> date:
+        return self.recent_end
+
+    def as_dict(self) -> dict:
+        return {k: v.isoformat() for k, v in self.__dict__.items()}
+
+
+def load_env(env_file: str | None = None) -> None:
+    if load_dotenv is not None:
+        load_dotenv(env_file or ".env", override=False)
+
+
+def load_config(path: str | Path) -> dict:
+    p = Path(path)
+    if not p.exists():
+        raise ConfigError(f"Ayar dosyası bulunamadı: {p}")
+    with p.open(encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+    for key in ("window", "analysis", "sources", "terms"):
+        if key not in cfg:
+            raise ConfigError(f"Ayar dosyasında '{key}' bölümü eksik: {p}")
+    return cfg
+
+
+def parse_terms(cfg: dict, only_ids: list[str] | None = None, extra: list[str] | None = None) -> list[Term]:
+    """Config'teki terimleri döndürür.
+
+    only_ids: sadece bu id'leri al (komut satırından --terms).
+    extra: komut satırından --term ile verilen ek terimler; aynı metin tüm kaynaklarda sorgulanır.
+    """
+    terms: list[Term] = []
+    seen: set[str] = set()
+    for t in cfg.get("terms") or []:
+        if "id" not in t or "label" not in t:
+            raise ConfigError(f"Her terimde 'id' ve 'label' olmalı: {t}")
+        if t["id"] in seen:
+            raise ConfigError(f"Tekrarlanan terim id: {t['id']}")
+        seen.add(t["id"])
+        terms.append(Term(id=t["id"], label=t["label"], category=t.get("category", ""),
+                          queries=dict(t.get("queries") or {})))
+    if only_ids:
+        wanted = set(only_ids)
+        unknown = wanted - seen
+        if unknown:
+            raise ConfigError(f"Config'te olmayan terim id: {', '.join(sorted(unknown))}")
+        terms = [t for t in terms if t.id in wanted]
+    for text in extra or []:
+        tid = _slug(text)
+        if tid in seen:
+            raise ConfigError(f"--term '{text}' mevcut bir id ile çakışıyor: {tid}")
+        seen.add(tid)
+        terms.append(Term(id=tid, label=text, category="komut satırı",
+                          queries={"wikimedia": text, "gdelt": text, "google_trends": text}))
+    if not terms:
+        raise ConfigError("Sorgulanacak terim yok.")
+    return terms
+
+
+def compute_window(cfg: dict, today: date | None = None, end: date | None = None) -> Window:
+    w = cfg["window"]
+    recent = int(w.get("recent_days", 28))
+    base = int(w.get("baseline_days", recent))
+    if recent < 3 or base < 3:
+        raise ConfigError("recent_days ve baseline_days en az 3 olmalı.")
+    if end is None:
+        today = today or date.today()
+        end = today - timedelta(days=int(w.get("end_offset_days", 2)))
+    recent_start = end - timedelta(days=recent - 1)
+    baseline_end = recent_start - timedelta(days=1)
+    baseline_start = baseline_end - timedelta(days=base - 1)
+    return Window(baseline_start, baseline_end, recent_start, end)
+
+
+def llm_settings() -> dict:
+    """Model bağlantı ayarları .env / ortam değişkenlerinden gelir; repoya yazılmaz."""
+    return {
+        "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+        "model": os.getenv("OLLAMA_MODEL", "llama3.2"),
+        "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.2")),
+        "timeout": float(os.getenv("OLLAMA_TIMEOUT", "300")),
+    }
+
+
+def user_agent() -> str:
+    contact = os.getenv("CONTACT_EMAIL", "").strip()
+    contact_part = f" ({contact})" if contact else ""
+    return f"SENG360-trendpipe/0.1{contact_part} python-requests"
+
+
+_TR = str.maketrans("çğıöşüÇĞİÖŞÜ ", "cgiosuCGIOSU_")
+
+
+def _slug(text: str) -> str:
+    s = text.translate(_TR).lower()
+    return "".join(ch for ch in s if ch.isalnum() or ch == "_") or "terim"

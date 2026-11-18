@@ -221,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- trendpipe ---
+# Her çalıştırma burada oluşur; repoya sadece data/sample/ altındaki örnek girer.
+data/runs/

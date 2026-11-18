@@ -1,0 +1,99 @@
+# Trend veri hattı ayarları.
+# Bu dosyada gizli bilgi YOK. Anahtar/adres gibi bilgiler .env dosyasına yazılır (bkz. .env.example).
+# Terim eklemek/çıkarmak için kodu değil bu dosyayı değiştirin.
+
+brand:
+  # Marka adı koda gömülmez; burada değiştirilebilir. Çoklu marka için ayrı config dosyaları kullanılabilir:
+  #   python -m trendpipe all --config config/marka_b.yaml
+  name: "Örnek Giyim Markası"
+  market: "TR"
+  season: "2026-2027 Sonbahar/Kış"
+
+window:
+  # Son "recent_days" günü, hemen önceki "baseline_days" günle karşılaştırırız.
+  recent_days: 28
+  baseline_days: 28
+  # Kaynaklar son 1-2 günü geç/eksik yayımlayabildiği için bitiş tarihi bugünden bu kadar gün geridedir.
+  end_offset_days: 2
+
+analysis:
+  # Bir pencerede verinin en az bu oranı mevcut değilse değişim HESAPLANMAZ (eksik veri sıfır sayılmaz).
+  min_coverage: 0.8
+  # Bu eşikten küçük yüzde değişimler "yatay" kabul edilir.
+  flat_threshold_pct: 15
+  # Karşılaştırma dönemi ortalaması bu değerin altındaysa "düşük hacim" uyarısı verilir (kaynak birimiyle).
+  low_volume:
+    wikimedia: 20        # günlük sayfa görüntüleme
+    gdelt: 3             # günlük haber sayısı
+    google_trends: 5     # 0-100 göreli ilgi
+
+sources:
+  wikimedia:
+    enabled: true
+    # tr.wikipedia ≈ Türkçe okuyucular. Küresel ilgi için en.wikipedia kullanılabilir (terimde makale adı İngilizce olmalı).
+    project: "tr.wikipedia"
+    access: "all-access"
+    agent: "user"          # botlar hariç, gerçek kullanıcı görüntülemeleri
+  gdelt:
+    enabled: true
+    # GDELT aramayı İngilizce anahtar kelimeyle, makine çevirisi üzerinden yapar; filtreler Türkiye kaynaklı Türkçe haberler.
+    source_country: "turkey"
+    source_lang: "turkish"
+    mode: "timelinevolraw"  # günlük eşleşen haber SAYISI (+ izlenen toplam haber 'norm')
+    request_interval_sec: 6 # GDELT sık isteği engeller; istekler arası bekleme
+  google_trends:
+    # Resmi API henüz kapalı alfa; bu adaptör resmi olmayan pytrends kütüphanesini kullanır ve engellenebilir.
+    # Denemek için: pip install -r requirements-optional.txt ve enabled: true
+    enabled: false
+    geo: "TR"
+    hl: "tr-TR"
+    request_interval_sec: 10
+
+# Her terim, her kaynakta farklı biçimde sorgulanır:
+#   wikimedia     -> Vikipedi makale başlığı (tam başlık, büyük/küçük harf önemli)
+#   gdelt         -> İngilizce anahtar kelime / ifade (tırnak = tam ifade)
+#   google_trends -> Türkçe arama terimi
+# Bir kaynak için sorgu yazılmazsa o terim o kaynakta atlanır.
+terms:
+  - id: trenckot
+    label: "Trençkot"
+    category: "dış giyim"
+    queries:
+      wikimedia: "Trençkot"
+      gdelt: '"trench coat"'
+      google_trends: "trençkot"
+  - id: palto
+    label: "Palto"
+    category: "dış giyim"
+    queries:
+      wikimedia: "Palto"
+      gdelt: '"wool coat"'
+      google_trends: "kaşe kaban"
+  - id: hirka
+    label: "Hırka"
+    category: "üst giyim"
+    queries:
+      wikimedia: "Hırka"
+      gdelt: "cardigan"
+      google_trends: "hırka"
+  - id: kazak
+    label: "Kazak"
+    category: "üst giyim"
+    queries:
+      wikimedia: "Kazak (giysi)"
+      gdelt: "sweater"
+      google_trends: "kazak"
+  - id: kot_pantolon
+    label: "Kot pantolon"
+    category: "alt giyim"
+    queries:
+      wikimedia: "Kot pantolon"
+      gdelt: "jeans"
+      google_trends: "kot pantolon"
+  - id: bot
+    label: "Bot / Çizme"
+    category: "ayakkabı"
+    queries:
+      wikimedia: "Çizme"
+      gdelt: "boots"
+      google_trends: "kadın bot"

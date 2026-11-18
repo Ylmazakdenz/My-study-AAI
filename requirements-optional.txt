@@ -1,0 +1,3 @@
+# Deneysel Google Trends adaptörü için (resmi olmayan, arşivlenmiş kütüphane; engellenebilir)
+pytrends>=4.9.2
+pandas>=2.0

@@ -17,10 +17,13 @@ from .base import Source
 
 
 class GoogleTrendsSource(Source):
-    name = "google_trends"
+    type_name = "google_trends"
     metric = "relative_interest_0_100"
-    description = ("Google aramalarında terime duyulan göreli ilgi (0-100, her terim kendi dönemindeki zirvesine "
-                   "göre ölçeklenir). Arama ilgisini gösterir; arama sayısı veya satış değildir.")
+
+    @property
+    def description(self) -> str:
+        return ("Google aramalarında terime duyulan göreli ilgi (0-100, her terim kendi dönemindeki zirvesine "
+                "göre ölçeklenir). Arama ilgisini gösterir; arama sayısı veya satış değildir.")
 
     def fetch(self, term_id, query, start, end):
         try:
@@ -32,6 +35,7 @@ class GoogleTrendsSource(Source):
         geo = self.settings.get("geo", "TR")
         url = f"https://trends.google.com/trends/explore?q={query}&geo={geo}&date={timeframe.replace(' ', '%20')}"
         self._throttle()
+        self._attempts = 1
         try:
             client = TrendReq(hl=self.settings.get("hl", "tr-TR"), tz=-180, timeout=(10, 30))
             client.build_payload([query], timeframe=timeframe, geo=geo)

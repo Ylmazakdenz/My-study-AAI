@@ -177,3 +177,106 @@ def test_end_to_end_fetch_and_analyze(cfg, tmp_path, monkeypatch, capsys):
 
     # kayıtlı veriden bağlantısız tekrar analiz
     assert cli.main(["analyze", "--run", str(run)]) == 0
+
+
+# ---------- Colab'daki ilk gerçek denemeden çıkan durumlar ----------
+
+def _colab_rows():
+    """2026-11-18 Colab çalıştırmasındaki analiz sonuçlarının özeti (wikimedia tr + gdelt hataları)."""
+    def ok(label, bm, rm, pct, d):
+        return {"source": "wikimedia", "label": label, "fetch_status": "ok", "result": "computed",
+                "baseline_mean": bm, "recent_mean": rm, "pct_change": pct, "direction": d, "low_volume": True,
+                "baseline_coverage": 1.0, "recent_coverage": 1.0, "notes": ["Düşük hacim"]}
+
+    def err(label, msg):
+        return {"source": "gdelt", "label": label, "fetch_status": "error", "result": "no_data",
+                "notes": [f"Veri alınamadı (error): {msg}"]}
+    rows = [ok("Kazak", 1.5, 2.3, 56.1, "up"), ok("Kot pantolon", 7.1, 7.9, 11.1, "flat"),
+            ok("Palto", 4.2, 4.4, 4.2, "flat"), ok("Trençkot", 3.0, 2.7, -9.5, "flat"),
+            err("Trençkot", "ReadTimeout: Read timed out"), err("Kazak", "HTTP 429: Please limit requests")]
+    from trendpipe.analysis import classify
+    for r in rows:
+        r["signal"] = classify(r)
+    return rows
+
+
+def test_claim_check_catches_colab_mistakes():
+    from trendpipe.llm import check_output
+    bad = ("## 1. Öne çıkan terimler\n- Palto: popülerlik kazanıyor.\n- Kazak: popülerlik kazanıyor.\n"
+           "## 4. Bu veriyle söyleyemediklerimiz\n"
+           "- Trençkot: Veri alınamadı (wikimedia'dan), therefore unavailable.\n")
+    chk = check_output(bad, _colab_rows())
+    joined = " ".join(chk["claim_issues"])
+    assert not chk["ok"]
+    assert "'Palto' için artış" in joined                    # yatay terime yükseliş denmiş
+    assert "'Kazak' için artış yalnızca düşük hacimli" in joined
+    assert "'Trençkot' için wikimedia verisi alındığı halde" in joined
+    assert "therefore" in joined
+    assert "satış" in " ".join(check_output("## 1. X\n- Satışlar artacak.\n", _colab_rows())["claim_issues"])
+
+
+def test_claim_check_accepts_correct_answer():
+    from trendpipe.llm import check_output
+    good = ("## 1. Öne çıkan terimler\n- Güvenilir yükseliş gösteren terim yok.\n"
+            "- Kazak (wikimedia) %+56,1 arttı ancak düşük hacim nedeniyle güvenilir değil.\n"
+            "## 4. Bu veriyle söyleyemediklerimiz\n- Trençkot için gdelt verisi alınamadı.\n")
+    chk = check_output(good, _colab_rows())
+    assert chk["ok"], chk
+
+
+def test_prompt_groups_and_reasons():
+    from trendpipe.prompts import build_user_prompt
+    ctx = {"brand": {"name": "B", "market": "TR", "season": "KŞ"},
+           "window": {"baseline_start": "a", "baseline_end": "b", "recent_start": "c", "recent_end": "d"},
+           "sources": {"wikimedia": "x", "gdelt": "y"}}
+    p = build_user_prompt(_colab_rows(), ctx)
+    weak = p.split("### Düşük hacim")[1].split("###")[0]
+    assert "Kazak (wikimedia)" in weak and "%+56,1" in weak
+    nodata = p.split("### Veri yok")[1]
+    assert "Trençkot (gdelt): kaynak zamanında yanıt vermedi" in nodata
+    assert "Kazak (gdelt): kaynağın istek sınırına takıldı" in nodata
+    assert "Read timed out" not in p                           # ham hata metni modele gitmez
+    assert "### Güvenilir yükseliş (0)" in p
+
+
+# ---------- tekrar deneme ve çoklu kaynak örneği ----------
+
+class _SeqSession:
+    def __init__(self, seq):
+        self.seq = list(seq)
+        self.calls = 0
+
+    def get(self, *a, **k):
+        self.calls += 1
+        item = self.seq.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def test_gdelt_retries_on_timeout_and_429(cfg):
+    import requests
+    w = window(cfg)
+    sess = _SeqSession([requests.ReadTimeout("yavaş"), FakeResponse(429, "Please limit requests"),
+                        FakeResponse(200, gdelt_body(w.start, [1] * 14))])
+    src = GdeltSource({"max_retries": 3, "retry_backoff_sec": 0}, session=sess)
+    res = src.fetch("t", "coat", w.start, w.end)
+    assert res.status == FetchStatus.OK and res.attempts == 3 and sess.calls == 3
+
+
+def test_gdelt_gives_up_after_retries(cfg):
+    w = window(cfg)
+    sess = _SeqSession([FakeResponse(429, "Please limit requests")] * 3)
+    res = GdeltSource({"max_retries": 2, "retry_backoff_sec": 0}, session=sess).fetch("t", "coat", w.start, w.end)
+    assert res.status == FetchStatus.ERROR and "429" in res.error and res.attempts == 3
+
+
+def test_two_wikimedia_instances():
+    from trendpipe.sources import build_sources
+    cfg2 = {"sources": {"wikimedia": {"type": "wikimedia", "enabled": True, "project": "tr.wikipedia"},
+                        "wikimedia_en": {"type": "wikimedia", "enabled": True, "project": "en.wikipedia"},
+                        "gdelt": {"enabled": False}}}
+    srcs = build_sources(cfg2)
+    assert [s.name for s in srcs] == ["wikimedia", "wikimedia_en"]
+    assert "/en.wikipedia/" in srcs[1].build_url("Trench coat", date(2026, 1, 1), date(2026, 1, 2))
+    assert "İngilizce" in srcs[1].description

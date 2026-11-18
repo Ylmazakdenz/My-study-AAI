@@ -63,7 +63,7 @@ def parse_terms(cfg: dict, only_ids: list[str] | None = None, extra: list[str] |
     """Config'teki terimleri döndürür.
 
     only_ids: sadece bu id'leri al (komut satırından --terms).
-    extra: komut satırından --term ile verilen ek terimler; aynı metin tüm kaynaklarda sorgulanır.
+    extra: komut satırından --term ile verilen ek terimler; aynı metin config'teki tüm kaynaklarda sorgulanır.
     """
     terms: list[Term] = []
     seen: set[str] = set()
@@ -87,7 +87,7 @@ def parse_terms(cfg: dict, only_ids: list[str] | None = None, extra: list[str] |
             raise ConfigError(f"--term '{text}' mevcut bir id ile çakışıyor: {tid}")
         seen.add(tid)
         terms.append(Term(id=tid, label=text, category="komut satırı",
-                          queries={"wikimedia": text, "gdelt": text, "google_trends": text}))
+                          queries={name: text for name in (cfg.get("sources") or {})}))
     if not terms:
         raise ConfigError("Sorgulanacak terim yok.")
     return terms

@@ -18,15 +18,24 @@ BASE = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article"
 
 
 class WikimediaSource(Source):
-    name = "wikimedia"
+    type_name = "wikimedia"
     metric = "pageviews"
-    description = ("Vikipedi makalesinin günlük görüntülenme sayısı (botlar hariç). Bir konuya duyulan bilgi "
-                   "merakını gösterir; satın alma niyeti veya satış değildir.")
+
+    @property
+    def project(self) -> str:
+        return self.settings.get("project", "tr.wikipedia")
+
+    @property
+    def description(self) -> str:
+        lang = {"tr": "Türkçe", "en": "İngilizce"}.get(self.project.split(".")[0], self.project)
+        scope = "Türkçe okuyucular" if self.project.startswith("tr.") else "dünya geneli okuyucular"
+        return (f"{lang} Vikipedi ({self.project}) makalesinin günlük görüntülenme sayısı, botlar hariç "
+                f"({scope}). Bir ürün tipine duyulan bilgi merakını gösterir; satın alma niyeti veya satış değildir.")
 
     def build_url(self, article: str, start: date, end: date) -> str:
         s = self.settings
         title = quote(article.replace(" ", "_"), safe="")
-        return (f"{BASE}/{s.get('project', 'tr.wikipedia')}/{s.get('access', 'all-access')}/"
+        return (f"{BASE}/{self.project}/{s.get('access', 'all-access')}/"
                 f"{s.get('agent', 'user')}/{title}/daily/{start:%Y%m%d}/{end:%Y%m%d}")
 
     def fetch(self, term_id, query, start, end):

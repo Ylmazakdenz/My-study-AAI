@@ -20,7 +20,7 @@ from .analysis import ANALYSIS_FIELDS, analyze_run, flatten_for_csv
 from .config import ConfigError, Window, compute_window, llm_settings, load_config, load_env, parse_terms, user_agent
 from .llm import LLMError, interpret, ping, to_markdown
 from .models import FetchStatus
-from .sources import REGISTRY, build_sources
+from .sources import build_sources
 from .storage import (new_run_dir, read_json, read_timeseries, resolve_run_dir, save_raw, write_csv, write_json,
                       write_timeseries)
 
@@ -81,6 +81,8 @@ def cmd_fetch(args) -> Path:
             if res.status == FetchStatus.OK:
                 results.append(res)
             detail = f"{len(res.points)} gün" if res.status == FetchStatus.OK else (res.error or "")
+            if res.attempts > 1:
+                detail += f" ({res.attempts}. denemede)"
             print(f"  [{STATUS_ICON[res.status]:4}] {src.name:13} {t.label:18} {q!r:24} {detail[:110]}")
 
     write_timeseries(run_dir, results, terms_by_id)
@@ -135,7 +137,8 @@ def cmd_interpret(args, run_dir: Path | None = None) -> int:
     rows = read_json(run_dir / "analysis.json")["rows"]
     used = {r["source"] for r in rows}
     context = {"brand": manifest.get("brand", {}), "window": manifest["window"],
-               "sources": {k: v["description"] for k, v in manifest["sources"].items() if k in used}}
+               "sources": {k: v["description"] for k, v in manifest["sources"].items() if k in used},
+               "flat_threshold_pct": (manifest.get("analysis_settings") or {}).get("flat_threshold_pct", 15)}
     s = llm_settings()
     print(f"\nModele gönderiliyor: host={s['host']} model={s['model']} ...")
     try:
@@ -177,7 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
         if fetch:
             sp.add_argument("--terms", help="sadece bu terim id'leri, virgülle: trenckot,hirka")
             sp.add_argument("--term", action="append", help="config dışı ek terim (tekrarlanabilir): --term 'Yelek'")
-            sp.add_argument("--sources", help=f"kaynak seçimi, virgülle: {','.join(REGISTRY)}")
+            sp.add_argument("--sources", help="kaynak seçimi, virgülle (config'teki adlar): wikimedia,gdelt")
             sp.add_argument("--end", help="dönem bitiş tarihi YYYY-MM-DD (varsayılan: bugün - end_offset_days)")
         if run:
             sp.add_argument("--run", default="latest", help="çalıştırma klasörü ya da 'latest'")

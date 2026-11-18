@@ -23,25 +23,45 @@ analysis:
   flat_threshold_pct: 15
   # Karşılaştırma dönemi ortalaması bu değerin altındaysa "düşük hacim" uyarısı verilir (kaynak birimiyle).
   low_volume:
-    wikimedia: 20        # günlük sayfa görüntüleme
+    wikimedia: 20        # günlük sayfa görüntüleme (Türkçe Vikipedi)
+    wikimedia_en: 100    # günlük sayfa görüntüleme (İngilizce Vikipedi)
     gdelt: 3             # günlük haber sayısı
     google_trends: 5     # 0-100 göreli ilgi
 
 sources:
+  # Her anahtar bir kaynak örneğidir; "type" kaynağın tipidir. Aynı tipten birden fazla örnek olabilir.
   wikimedia:
+    type: wikimedia
     enabled: true
-    # tr.wikipedia ≈ Türkçe okuyucular. Küresel ilgi için en.wikipedia kullanılabilir (terimde makale adı İngilizce olmalı).
+    # Türkçe Vikipedi ≈ Türkçe okuyucular. Hacim düşük olabilir (günde birkaç görüntüleme).
     project: "tr.wikipedia"
     access: "all-access"
     agent: "user"          # botlar hariç, gerçek kullanıcı görüntülemeleri
+    max_retries: 2
+    retry_backoff_sec: 3
+  wikimedia_en:
+    type: wikimedia
+    enabled: true
+    # İngilizce Vikipedi = dünya geneli ilgi; hacmi yüksek olduğu için değişimler daha güvenilir.
+    project: "en.wikipedia"
+    access: "all-access"
+    agent: "user"
+    max_retries: 2
+    retry_backoff_sec: 3
   gdelt:
+    type: gdelt
     enabled: true
     # GDELT aramayı İngilizce anahtar kelimeyle, makine çevirisi üzerinden yapar; filtreler Türkiye kaynaklı Türkçe haberler.
     source_country: "turkey"
     source_lang: "turkish"
     mode: "timelinevolraw"  # günlük eşleşen haber SAYISI (+ izlenen toplam haber 'norm')
-    request_interval_sec: 6 # GDELT sık isteği engeller; istekler arası bekleme
+    # GDELT yavaş yanıt verebilir ve sık isteği 429 ile reddeder: uzun zaman aşımı + bekleyerek tekrar deneme.
+    request_interval_sec: 8
+    timeout_sec: 90
+    max_retries: 3
+    retry_backoff_sec: 15  # 15, 30, 45 sn bekleyerek tekrar dener
   google_trends:
+    type: google_trends
     # Resmi API henüz kapalı alfa; bu adaptör resmi olmayan pytrends kütüphanesini kullanır ve engellenebilir.
     # Denemek için: pip install -r requirements-optional.txt ve enabled: true
     enabled: false
@@ -50,7 +70,8 @@ sources:
     request_interval_sec: 10
 
 # Her terim, her kaynakta farklı biçimde sorgulanır:
-#   wikimedia     -> Vikipedi makale başlığı (tam başlık, büyük/küçük harf önemli)
+#   wikimedia     -> Türkçe Vikipedi makale başlığı (tam başlık, büyük/küçük harf önemli)
+#   wikimedia_en  -> İngilizce Vikipedi makale başlığı
 #   gdelt         -> İngilizce anahtar kelime / ifade (tırnak = tam ifade)
 #   google_trends -> Türkçe arama terimi
 # Bir kaynak için sorgu yazılmazsa o terim o kaynakta atlanır.
@@ -60,6 +81,7 @@ terms:
     category: "dış giyim"
     queries:
       wikimedia: "Trençkot"
+      wikimedia_en: "Trench coat"
       gdelt: '"trench coat"'
       google_trends: "trençkot"
   - id: palto
@@ -67,6 +89,7 @@ terms:
     category: "dış giyim"
     queries:
       wikimedia: "Palto"
+      wikimedia_en: "Overcoat"
       gdelt: '"wool coat"'
       google_trends: "kaşe kaban"
   - id: hirka
@@ -74,6 +97,7 @@ terms:
     category: "üst giyim"
     queries:
       wikimedia: "Hırka"
+      wikimedia_en: "Cardigan (sweater)"
       gdelt: "cardigan"
       google_trends: "hırka"
   - id: kazak
@@ -81,6 +105,7 @@ terms:
     category: "üst giyim"
     queries:
       wikimedia: "Kazak (giysi)"
+      wikimedia_en: "Sweater"
       gdelt: "sweater"
       google_trends: "kazak"
   - id: kot_pantolon
@@ -88,6 +113,7 @@ terms:
     category: "alt giyim"
     queries:
       wikimedia: "Kot pantolon"
+      wikimedia_en: "Jeans"
       gdelt: "jeans"
       google_trends: "kot pantolon"
   - id: bot
@@ -95,5 +121,6 @@ terms:
     category: "ayakkabı"
     queries:
       wikimedia: "Çizme"
+      wikimedia_en: "Boot"
       gdelt: "boots"
       google_trends: "kadın bot"

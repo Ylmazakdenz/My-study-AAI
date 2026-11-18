@@ -19,8 +19,30 @@ ANALYSIS_FIELDS = [
     "baseline_start", "baseline_end", "recent_start", "recent_end",
     "baseline_days_present", "recent_days_present", "baseline_coverage", "recent_coverage",
     "baseline_mean", "recent_mean", "abs_change", "pct_change", "recent_slope_per_day",
-    "direction", "rank_in_source", "notes",
+    "direction", "low_volume", "signal", "rank_in_source", "notes",
 ]
+
+
+class Signal:
+    """Yorum için sınıflandırma (Python yapar, model değil)."""
+
+    STRONG_UP = "strong_up"          # yeterli hacim + eşik üstü artış
+    STRONG_DOWN = "strong_down"      # yeterli hacim + eşik üstü düşüş
+    FLAT = "flat"                    # yeterli hacim, anlamlı değişim yok
+    WEAK = "weak"                    # hesaplandı ama düşük hacim / önceki dönem 0 -> güvenilmez
+    INSUFFICIENT = "insufficient"    # kapsama yetersiz, hesaplanmadı
+    NO_DATA = "no_data"              # veri alınamadı
+
+
+def classify(row: dict) -> str:
+    res = row.get("result")
+    if res == Result.NO_DATA:
+        return Signal.NO_DATA
+    if res == Result.INSUFFICIENT:
+        return Signal.INSUFFICIENT
+    if res == Result.BASELINE_ZERO or row.get("low_volume"):
+        return Signal.WEAK
+    return {"up": Signal.STRONG_UP, "down": Signal.STRONG_DOWN}.get(row.get("direction"), Signal.FLAT)
 
 
 class Result:
@@ -60,7 +82,7 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
         "baseline_coverage": round(len(base_vals) / len(base_days), 3),
         "recent_coverage": round(len(rec_vals) / len(rec_days), 3),
         "baseline_mean": None, "recent_mean": None, "abs_change": None, "pct_change": None,
-        "recent_slope_per_day": None, "direction": None, "notes": [],
+        "recent_slope_per_day": None, "direction": None, "low_volume": None, "notes": [],
     }
     if not base_vals and not rec_vals:
         out["result"] = Result.NO_DATA
@@ -89,7 +111,8 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
         out["pct_change"] = round(pct, 1)
         out["result"] = Result.COMPUTED
         out["direction"] = "up" if pct >= flat_threshold_pct else "down" if pct <= -flat_threshold_pct else "flat"
-    if low_volume is not None and bm < low_volume and rm < low_volume:
+    out["low_volume"] = bool(low_volume is not None and bm < low_volume and rm < low_volume)
+    if out["low_volume"]:
         out["notes"].append(f"Düşük hacim (ortalamalar < {low_volume}); küçük sayılardaki değişim gürültü olabilir.")
     return out
 
@@ -110,6 +133,8 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
                                flat_threshold_pct=float(a.get("flat_threshold_pct", 15)),
                                low_volume=low.get(rec["source"]))
         rows.append({**base, **stats})
+    for r in rows:
+        r["signal"] = classify(r)
 
     # Sıralama yalnızca aynı kaynak içinde ve hesaplanabilen yüzde değişimlere göre yapılır.
     for src in {r["source"] for r in rows}:

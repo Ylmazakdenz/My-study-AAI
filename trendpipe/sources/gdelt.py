@@ -18,9 +18,12 @@ BASE = "https://api.gdeltproject.org/api/v2/doc/doc"
 
 
 class GdeltSource(Source):
-    name = "gdelt"
-    description = ("GDELT'in izlediği çevrim içi haberlerde terimin geçtiği haber sayısı (Türkiye kaynaklı, "
-                   "Türkçe haberler). Medya/haber görünürlüğünü gösterir; tüketici talebi veya satış değildir.")
+    type_name = "gdelt"
+
+    @property
+    def description(self) -> str:
+        return ("GDELT'in izlediği çevrim içi haberlerde terimin geçtiği günlük haber sayısı (Türkiye kaynaklı, "
+                "Türkçe haberler). Medya/haber görünürlüğünü gösterir; tüketici talebi veya satış değildir.")
 
     @property
     def metric(self) -> str:  # type: ignore[override]

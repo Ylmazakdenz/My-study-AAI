@@ -48,6 +48,7 @@ class FetchResult:
     http_status: int | None = None
     error: str | None = None
     fetched_at: str | None = None     # ISO-8601 UTC
+    attempts: int = 0                 # kaç kez denendi (tekrar denemeler dahil)
 
     def meta(self) -> dict:
         d = asdict(self)

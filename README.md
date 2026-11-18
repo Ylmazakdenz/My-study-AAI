@@ -75,7 +75,7 @@ kapanınca model ve sunucu silinir; her oturumda kurulum hücreleri tekrar çal�
 | Değişken | Varsayılan | Açıklama |
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | Colab'da ve yerel kurulumda aynı |
-| `OLLAMA_MODEL` | `llama3.2` | T4'te `llama3.1:8b` de denenebilir |
+| `OLLAMA_MODEL` | `llama3.2` | T4'te `llama3.1:8b` de denenebilir (Türkçesi daha iyi) |
 | `OLLAMA_TEMPERATURE` | `0.2` | Düşük = daha tutarlı, daha az uydurma |
 | `CONTACT_EMAIL` | boş | Wikimedia User-Agent için önerilir |
 
@@ -98,10 +98,16 @@ Kontrol tarihi: **2026-11-19**. Kaynak: resmi belgeler (bağlantılar tabloda).
 
 ### Seçim
 
-- **Çalışan ana kaynak: Wikimedia** — gerçek, günlük, karşılaştırılabilir zaman serisi; Türkçe; anahtar/onay yok;
+- **Çalışan ana kaynak: Wikimedia** — gerçek, günlük, karşılaştırılabilir zaman serisi; anahtar/onay yok;
   CC0 lisans. Sınırı: makalesi olan terimlerde çalışır ve "merak" ölçer, satın alma niyeti ölçmez.
+  İki örnek olarak kullanılır:
+  - `wikimedia` (Türkçe Vikipedi): Türkiye'ye en yakın sinyal, ancak ilk gerçek çalıştırmada (18.11.2026) giyim
+    makaleleri günde yalnızca **1,5–8 görüntüleme** aldı; bu hacimde yüzde değişimler gürültüdür.
+  - `wikimedia_en` (İngilizce Vikipedi): dünya geneli ilgi, hacim yüksek; değişimler istatistiksel olarak daha anlamlı.
 - **Destek kaynağı: GDELT** — aynı terimlerin haber görünürlüğü; anahtar yok. Sınırı: Türkçe moda haberleri az
-  olduğundan bazı terimlerde hacim düşük kalabilir (kod bunu "düşük hacim" olarak işaretler).
+  olduğundan bazı terimlerde hacim düşük kalabilir (kod bunu "düşük hacim" olarak işaretler). İlk çalıştırmada
+  Colab'dan zaman aşımı ve 429 (hız sınırı) aldı; bu yüzden 90 sn zaman aşımı, istekler arası 8 sn ve
+  15/30/45 sn bekleyerek 3 tekrar deneme eklendi (`config.yaml` → `sources.gdelt`).
 - **Google Trends: deneysel** — ürün seçimi için en anlamlı veri olduğu için adaptörü hazır (`enabled: false`).
   Resmi alfa erişimine başvurulmalı; o zamana kadar pytrends ile denenir, engellenirse hata açıkça raporlanır.
 - Pinterest (onay + terim sorgulanamıyor), YouTube (zaman serisi yok) ve Reddit (onay kapanıyor) bu aşamada
@@ -156,14 +162,27 @@ data/runs/<YYYYMMDD-HHMMSS>/
 - Önceki dönem ortalaması 0 ise yüzde tanımsızdır (`baseline_zero`).
 - `direction`: ±%15 eşiği (config'te değiştirilebilir) · `recent_slope_per_day`: yakın dönemdeki eğim ·
   düşük hacimli serilere uyarı notu · sıralama **yalnızca aynı kaynak içinde**.
+- `signal`: Python'un sınıflandırması — `strong_up`, `strong_down`, `flat`, `weak` (düşük hacim),
+  `insufficient`, `no_data`. Model yalnızca bu sınıflara göre "yükseliş/düşüş" diyebilir.
 - Tek seferlik toplamdan "yükseliyor" sonucu çıkarılmaz; her sonuç iki dönemin karşılaştırmasıdır.
 
 ### Model yorumu ve güvenlik kontrolleri
 
-Modele yalnızca hesaplanmış sonuçlar, dönem ve her kaynağın neyi ölçtüğü gönderilir. İstem şunları ister:
-öne çıkan terimler, destekleyen ölçüm ve dönem, ürün seçimine katkı, **bu veriyle söyleyemediklerimiz**.
-Satış, stok, talep veya fiyat uydurmak yasaktır. Yanıttaki yüzdeler hesaplanan değerlerle otomatik
-karşılaştırılır; eşleşmeyen yüzde varsa `interpretation.md` başında ⚠️ uyarısı çıkar.
+Modele ham JSON değil, Python'un Türkçe cümlelere çevirip **gruplara ayırdığı** sonuçlar gönderilir
+(güvenilir yükseliş / düşüş / değişim yok / düşük hacim / hesaplanamadı / veri yok). Ham hata metinleri de
+kısa Türkçe nedenlere çevrilir. İstem şunları ister: öne çıkan terimler, destekleyen ölçüm ve dönem, ürün
+seçimine katkı, **bu veriyle söyleyemediklerimiz**. Satış, stok, talep veya fiyat uydurmak yasaktır.
+
+Yanıt otomatik denetlenir; sorun varsa `interpretation.md` başında ⚠️ ile listelenir:
+- hesaplanan sonuçlarda olmayan yüzdeler,
+- yönü farklı hesaplanmış bir terim için "artış/düşüş" iddiası (ya da düşük hacimli seride çekincesiz iddia),
+- verisi gelmiş bir kaynak-terim için "veri alınamadı" denmesi,
+- 1-3. bölümlerde satış, stok, ciro gibi veride olmayan metrikler,
+- İngilizce kelimeler.
+
+Bu denetim, ilk Colab denemesinde `llama3.2`'nin yaptığı hataların (yatay terimlere "popülerlik kazanıyor",
+verisi olan terimlere "veri alınamadı", Türkçe-İngilizce karışık yanıt) yakalanması için eklendi
+(`tests/test_pipeline.py::test_claim_check_catches_colab_mistakes`).
 
 ---
 
@@ -175,7 +194,7 @@ trendpipe/
 ├── config.py         # YAML + .env okuma, dönem hesabı
 ├── models.py         # ortak veri yapıları ve durum kodları
 ├── sources/          # her kaynak bir adaptör: fetch(term, query, start, end) -> FetchResult
-│   ├── wikimedia.py  ├── gdelt.py  └── google_trends.py (deneysel)
+│   ├── wikimedia.py (tr + en)  ├── gdelt.py  └── google_trends.py (deneysel)
 ├── storage.py        # klasör düzeni, ham/düzenlenmiş kayıt
 ├── analysis.py       # dönem karşılaştırması
 ├── prompts.py        # model istemi

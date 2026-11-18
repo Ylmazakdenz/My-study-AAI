@@ -9,7 +9,7 @@ Kurallar:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from statistics import mean
+from statistics import mean, median
 
 from .config import Window
 from .models import FetchStatus, Point
@@ -17,7 +17,7 @@ from .models import FetchStatus, Point
 ANALYSIS_FIELDS = [
     "source", "metric", "term_id", "label", "category", "query", "fetch_status", "result",
     "baseline_start", "baseline_end", "recent_start", "recent_end",
-    "baseline_days_present", "recent_days_present", "baseline_coverage", "recent_coverage",
+    "baseline_days_present", "recent_days_present", "source_gap_days", "baseline_coverage", "recent_coverage",
     "baseline_mean", "recent_mean", "abs_change", "pct_change", "recent_slope_per_day",
     "direction", "low_volume", "signal", "rank_in_source", "notes",
 ]
@@ -69,21 +69,70 @@ def _slope(values: list[tuple[int, float]]) -> float | None:
     return sum((x - mx) * (y - my) for x, y in values) / den
 
 
+def source_gap_days(series_list: list[list[Point]], window: Window, min_series: int = 3) -> set[date]:
+    """Bir kaynağın TÜM terimlerinde aynı anda eksik olan günler = kaynağın kendi kesintisi.
+
+    Terime özgü bir boşluk değil, kaynağın o gün veri üretmemesidir (ör. GDELT'te o gün 'norm' da yoktur).
+    Bu çıkarım için en az `min_series` başarılı seri gerekir.
+    """
+    if len(series_list) < min_series:
+        return set()
+    present = {p.day for pts in series_list for p in pts}
+    return {d for d in _days(window.start, window.end) if d not in present}
+
+
+def normalize_by_norm(series_list: list[list[Point]], min_norm_ratio: float = 0.2, per: float = 10_000
+                      ) -> tuple[list[list[Point]], int]:
+    """GDELT: eşleşen haber sayısını o gün izlenen toplam habere ('norm') oranlar (10.000 haberde kaç tane).
+
+    Ham sayı, GDELT'in o gün kaç haber izlediğine bağlıdır; izleme hacmi düşünce sayı da düşer (gerçek bir ilgi
+    değişimi olmadan). İlk gerçek çalıştırmada (18.11.2026) yakın dönemde 'norm' ortalaması önceki dönemin
+    yarısının altına indi. Ayrıca izleme hacmi medyanın `min_norm_ratio` katından düşük olan günler bozuk
+    sayılır ve çıkarılır (sıfır sayılmaz, eksik sayılır). Döndürür: (yeni seriler, çıkarılan gün sayısı).
+    """
+    norms = [p.extra["norm"] for pts in series_list for p in pts if p.extra and p.extra.get("norm")]
+    if not norms:
+        return series_list, 0
+    cutoff = min_norm_ratio * median(norms)
+    dropped: set[date] = set()
+    out = []
+    for pts in series_list:
+        new = []
+        for p in pts:
+            n = (p.extra or {}).get("norm")
+            if not n or n < cutoff:
+                dropped.add(p.day)
+                continue
+            new.append(Point(p.day, p.value / n * per, {**(p.extra or {}), "raw": p.value}))
+        out.append(new)
+    return out, len(dropped)
+
+
 def analyze_series(points: list[Point], window: Window, *, min_coverage: float = 0.8,
-                   flat_threshold_pct: float = 15.0, low_volume: float | None = None) -> dict:
+                   flat_threshold_pct: float = 15.0, low_volume: float | None = None,
+                   gap_days: set[date] | None = None, min_window_days_ratio: float = 0.5) -> dict:
+    """gap_days: kaynağın kesinti günleri; kapsama hesabının paydasından çıkarılır (sıfır sayılmaz, yok sayılır)."""
+    gap_days = gap_days or set()
     by_day = {p.day: p.value for p in points}
-    base_days = _days(window.baseline_start, window.baseline_end)
-    rec_days = _days(window.recent_start, window.recent_end)
+    raw_by_day = {p.day: (p.extra or {}).get("raw", p.value) for p in points}
+    all_base = _days(window.baseline_start, window.baseline_end)
+    all_rec = _days(window.recent_start, window.recent_end)
+    base_days = [d for d in all_base if d not in gap_days]
+    rec_days = [d for d in all_rec if d not in gap_days]
     base_vals = [by_day[d] for d in base_days if d in by_day]
     rec_vals = [by_day[d] for d in rec_days if d in by_day]
     out = {
         **window.as_dict(),
         "baseline_days_present": len(base_vals), "recent_days_present": len(rec_vals),
-        "baseline_coverage": round(len(base_vals) / len(base_days), 3),
-        "recent_coverage": round(len(rec_vals) / len(rec_days), 3),
+        "source_gap_days": len(gap_days),
+        "baseline_coverage": round(len(base_vals) / len(base_days), 3) if base_days else 0.0,
+        "recent_coverage": round(len(rec_vals) / len(rec_days), 3) if rec_days else 0.0,
         "baseline_mean": None, "recent_mean": None, "abs_change": None, "pct_change": None,
         "recent_slope_per_day": None, "direction": None, "low_volume": None, "notes": [],
     }
+    if gap_days:
+        out["notes"].append(f"Kaynak kesintisi: {len(gap_days)} gün tüm terimlerde eksik; bu günler sıfır sayılmadı, "
+                            "hesaba katılmadı.")
     if not base_vals and not rec_vals:
         out["result"] = Result.NO_DATA
         out["notes"].append("Pencere içinde hiç veri yok.")
@@ -93,6 +142,11 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
         out["notes"].append(
             f"Kapsama yetersiz (önceki {out['baseline_coverage']:.0%}, yakın {out['recent_coverage']:.0%}; "
             f"gereken ≥{min_coverage:.0%}). Eksik günler sıfır sayılmadı, değişim hesaplanmadı.")
+        return out
+    if len(base_vals) < min_window_days_ratio * len(all_base) or len(rec_vals) < min_window_days_ratio * len(all_rec):
+        out["result"] = Result.INSUFFICIENT
+        out["notes"].append(f"Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki {len(base_vals)}/"
+                            f"{len(all_base)}, yakın {len(rec_vals)}/{len(all_rec)}); değişim hesaplanmadı.")
         return out
 
     bm, rm = mean(base_vals), mean(rec_vals)
@@ -111,7 +165,10 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
         out["pct_change"] = round(pct, 1)
         out["result"] = Result.COMPUTED
         out["direction"] = "up" if pct >= flat_threshold_pct else "down" if pct <= -flat_threshold_pct else "flat"
-    out["low_volume"] = bool(low_volume is not None and bm < low_volume and rm < low_volume)
+    # Düşük hacim, normalize edilmişse ham sayılar üzerinden değerlendirilir.
+    rbm = mean(raw_by_day[d] for d in base_days if d in by_day)
+    rrm = mean(raw_by_day[d] for d in rec_days if d in by_day)
+    out["low_volume"] = bool(low_volume is not None and rbm < low_volume and rrm < low_volume)
     if out["low_volume"]:
         out["notes"].append(f"Düşük hacim (ortalamalar < {low_volume}); küçük sayılardaki değişim gürültü olabilir.")
     return out
@@ -121,6 +178,18 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
     a = cfg.get("analysis") or {}
     low = a.get("low_volume") or {}
     rows = []
+    gaps: dict[str, set[date]] = {}
+    norm_sources = set(a.get("normalize_by_norm") or [])
+    series = dict(series)
+    normalized: dict[str, int] = {}
+    for src in {r["source"] for r in manifest["fetches"]}:
+        ok_ids = [r["term_id"] for r in manifest["fetches"] if r["source"] == src and r["status"] == FetchStatus.OK]
+        if src in norm_sources and ok_ids:
+            new, dropped = normalize_by_norm([series.get((src, t), []) for t in ok_ids],
+                                             float(a.get("min_norm_ratio", 0.2)))
+            series.update({(src, t): pts for t, pts in zip(ok_ids, new)})
+            normalized[src] = dropped
+        gaps[src] = source_gap_days([series.get((src, t), []) for t in ok_ids], window)
     for rec in manifest["fetches"]:
         base = {k: rec.get(k) for k in ("source", "metric", "term_id", "label", "category", "query")}
         base["fetch_status"] = rec["status"]
@@ -131,7 +200,12 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
         stats = analyze_series(series.get((rec["source"], rec["term_id"]), []), window,
                                min_coverage=float(a.get("min_coverage", 0.8)),
                                flat_threshold_pct=float(a.get("flat_threshold_pct", 15)),
-                               low_volume=low.get(rec["source"]))
+                               low_volume=low.get(rec["source"]), gap_days=gaps.get(rec["source"]),
+                               min_window_days_ratio=float(a.get("min_window_days_ratio", 0.5)))
+        if rec["source"] in normalized:
+            stats["metric"] = "articles_per_10k_monitored"
+            stats["notes"].insert(0, f"Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme hacmi "
+                                     f"çok düşük {normalized[rec['source']]} gün bozuk sayılıp çıkarıldı.")
         rows.append({**base, **stats})
     for r in rows:
         r["signal"] = classify(r)

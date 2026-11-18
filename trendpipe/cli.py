@@ -18,8 +18,9 @@ from pathlib import Path
 from . import __version__
 from .analysis import ANALYSIS_FIELDS, analyze_run, flatten_for_csv
 from .config import ConfigError, Window, compute_window, llm_settings, load_config, load_env, parse_terms, user_agent
-from .llm import LLMError, interpret, ping, to_markdown
+from .llm import LLMError, evidence_table, interpret, ping, to_markdown
 from .models import FetchStatus
+from .prompts import display_name
 from .sources import build_sources
 from .storage import (new_run_dir, read_json, read_timeseries, resolve_run_dir, save_raw, write_csv, write_json,
                       write_timeseries)
@@ -80,9 +81,9 @@ def cmd_fetch(args) -> Path:
             records.append(rec)
             if res.status == FetchStatus.OK:
                 results.append(res)
-            detail = f"{len(res.points)} gün" if res.status == FetchStatus.OK else (res.error or "")
+            detail = f"{len(res.points)} gün" if res.status == FetchStatus.OK else " ".join((res.error or "").split())
             if res.attempts > 1:
-                detail += f" ({res.attempts}. denemede)"
+                detail = f"({res.attempts}. deneme) {detail}"
             print(f"  [{STATUS_ICON[res.status]:4}] {src.name:13} {t.label:18} {q!r:24} {detail[:110]}")
 
     write_timeseries(run_dir, results, terms_by_id)
@@ -115,7 +116,8 @@ def cmd_analyze(args, run_dir: Path | None = None) -> Path:
         {"analysis": manifest.get("analysis_settings", {})}
     rows = analyze_run(manifest, read_timeseries(run_dir), cfg, _window_from_manifest(manifest))
     write_json(run_dir / "analysis.json", {"run_id": manifest["run_id"], "created_at": _now(),
-                                           "window": manifest["window"], "rows": rows})
+                                           "window": manifest["window"], "analysis_settings": cfg["analysis"],
+                                           "rows": rows})
     write_csv(run_dir / "analysis.csv", flatten_for_csv(rows), ANALYSIS_FIELDS)
 
     print(f"Analiz: {run_dir}/analysis.csv\n")
@@ -137,12 +139,14 @@ def cmd_interpret(args, run_dir: Path | None = None) -> int:
     rows = read_json(run_dir / "analysis.json")["rows"]
     used = {r["source"] for r in rows}
     context = {"brand": manifest.get("brand", {}), "window": manifest["window"],
-               "sources": {k: v["description"] for k, v in manifest["sources"].items() if k in used},
+               "sources": {k: {"display": display_name(k, v), "description": v["description"]}
+                           for k, v in manifest["sources"].items() if k in used},
                "flat_threshold_pct": (manifest.get("analysis_settings") or {}).get("flat_threshold_pct", 15)}
     s = llm_settings()
     print(f"\nModele gönderiliyor: host={s['host']} model={s['model']} ...")
     try:
         out = interpret(rows, context, s)
+        out["evidence"] = evidence_table(rows, {k: v["display"] for k, v in context["sources"].items()})
     except LLMError as exc:
         print(f"[HATA] {exc}", file=sys.stderr)
         return 2

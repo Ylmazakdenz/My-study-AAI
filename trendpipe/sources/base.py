@@ -72,6 +72,7 @@ class Source(ABC):
         """
         self._attempts = 0
         for attempt in range(self.max_retries + 1):
+            r = None
             self._throttle()
             self._attempts = attempt + 1
             last = attempt == self.max_retries
@@ -84,8 +85,17 @@ class Source(ABC):
             else:
                 if r.status_code not in RETRY_HTTP or last:
                     return r
-            time.sleep(self.retry_backoff * (attempt + 1))
+            time.sleep(max(self.retry_backoff * (attempt + 1), _retry_after(r)))
         raise RuntimeError("ulaşılamaz")  # pragma: no cover
+
+
+def _retry_after(resp) -> float:
+    """Sunucu 'Retry-After' başlığıyla ne kadar beklememizi söylediyse onu kullan (en fazla 120 sn)."""
+    headers = getattr(resp, "headers", None) or {}
+    try:
+        return min(float(headers.get("Retry-After", 0)), 120.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def error_result(src: Source, term_id: str, query: str, start: date, end: date,

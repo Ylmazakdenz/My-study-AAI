@@ -1,49 +1,54 @@
 """Model istemi.
 
-Küçük modeller (llama3.2 3B) ham JSON'u yanlış okuyabiliyor (ilk denemede yatay terimlere "yükseliyor" dedi,
-veri gelen terimlere "veri alınamadı" dedi). Bu yüzden Python sonuçları önce Türkçe, açık cümlelere ve hazır
-gruplara çevirir; model yalnızca bunları yorumlar ve ürün seçimine bağlar.
+Küçük modeller (llama3.2 3B) ham JSON'u yanlış okuyabiliyor. İlk iki Colab denemesinde:
+yatay terimlere "yükseliyor" dedi, verisi gelen terimlere "veri alınamadı" dedi, kaynakları birbiriyle karşılaştırdı,
+"satışta artış" uydurdu. Bu yüzden Python sonuçları önce Türkçe, hazır cümlelere ve gruplara çevirir:
+- kanıt satırları (2. bölüm için, kopyalanacak),
+- sınırlar listesi (4. bölüm için),
+model ise öne çıkanları seçer ve ürün seçimine bağlar (1. ve 3. bölüm).
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
+
 from .analysis import Signal
 
-SYSTEM_PROMPT = """Sen bir giyim markasının trend analistisin. Sana Python ile hesaplanmış ölçümler ve bunların hazır
-sınıflandırması veriliyor. Görevin bunları marka ekibi için yorumlamak.
+SYSTEM_PROMPT = """Sen bir giyim markasının trend analistisin. Sana Python ile hesaplanmış ölçümler, hazır kanıt
+satırları ve sınırlar listesi veriliyor. Görevin bunları marka ekibi için kısa ve doğru biçimde yazmak.
 
 KURALLAR:
-1. YALNIZCA verilen ölçümleri kullan. Yeni sayı, yüzde, tarih veya kaynak uydurma. Sayıları aynen aktar.
-2. "Yükseliş" veya "artış" ifadesini YALNIZCA "Güvenilir yükseliş" grubundaki terimler için kullan.
-   "Düşüş" ifadesini YALNIZCA "Güvenilir düşüş" grubundaki terimler için kullan.
-   "Anlamlı değişim yok" grubundakiler için "belirgin değişim yok" de.
-   "Düşük hacim" grubundakiler için değişimin güvenilir olmadığını söyle.
-3. "Veri alınamadı" yalnızca "Veri yok" grubunda listelenen kaynak-terim çiftleri için geçerlidir.
-4. Satış, stok, ciro, fiyat veya tüketici talebi hakkında bilgi verilmedi; bunlar hakkında iddiada bulunma.
-5. Kaynakların sayılarını birbirine ekleme ya da birbiriyle karşılaştırma; her kaynak farklı bir şey ölçer.
-6. Tamamen Türkçe yaz; İngilizce kelime kullanma. Kısa ve maddeli yaz.
+1. YALNIZCA verilen bilgileri kullan. Yeni sayı, yüzde, tarih veya kaynak uydurma.
+2. "Yükseliş/artış" yalnızca GÜVENİLİR YÜKSELİŞ listesindeki terimler için, "düşüş" yalnızca GÜVENİLİR DÜŞÜŞ
+   listesindekiler için kullanılabilir. Listede olmayan bir terime yükseliş ya da düşüş deme.
+3. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
+4. Kaynakları birbiriyle karşılaştırma ("X kaynağında daha yüksek" gibi). Her kaynak farklı bir şey ölçer.
+5. Tamamen Türkçe yaz; İngilizce kelime kullanma. Kısa ve maddeli yaz.
 
 ÇIKTI BİÇİMİ (tam olarak bu dört başlık):
 ## 1. Öne çıkan terimler
-(Güvenilir yükseliş/düşüş gösteren terimler. Hiç yoksa bunu açıkça yaz.)
+GÜVENİLİR YÜKSELİŞ ve GÜVENİLİR DÜŞÜŞ listelerindeki terimleri yaz (kaynağıyla birlikte). İkisi de boşsa
+"Güvenilir bir değişim gösteren terim yok." yaz.
 ## 2. Destekleyen ölçüm ve dönem
-(Her öne çıkan terim için: kaynak, önceki → yakın günlük ortalama, yüzde değişim, dönemler.)
+KANIT SATIRLARI'nı aynen kopyala; değiştirme, ekleme yapma.
 ## 3. Ürün seçimine olası katkı
-(Bu sinyaller hangi ürün tiplerini öne çıkarmayı ya da izlemeyi destekler; ihtiyatlı yaz.)
+Öne çıkan her terim için 1 madde: bu ilgi hangi ürün tipini öne çıkarmayı veya izlemeyi destekleyebilir.
+İhtiyatlı yaz ("destekleyebilir", "izlenmeli" gibi). Satış veya talep iddiası yapma.
 ## 4. Bu veriyle söyleyemediklerimiz
-(Ölçümlerin sınırları, düşük hacim, alınamayan veriler, satış/talep hakkında bilgi olmaması.)
+SINIRLAR listesindeki maddeleri aynen yaz.
 """
 
 DIRECTION_TR = {"up": "artış", "down": "düşüş", "flat": "belirgin değişim yok"}
 
-GROUP_TITLES = [
-    (Signal.STRONG_UP, "Güvenilir yükseliş"),
-    (Signal.STRONG_DOWN, "Güvenilir düşüş"),
-    (Signal.FLAT, "Anlamlı değişim yok"),
-    (Signal.WEAK, "Düşük hacim — değişim güvenilir değil"),
-    (Signal.INSUFFICIENT, "Eksik günler nedeniyle hesaplanamadı"),
-    (Signal.NO_DATA, "Veri yok"),
-]
+
+def display_name(key: str, info: dict | None = None) -> str:
+    """Kaynak anahtarını okunur Türkçe ada çevirir (manifest'teki ayarlardan)."""
+    s = (info or {}).get("settings") or {}
+    typ = s.get("type", key.split("_")[0] if key.startswith("wikimedia") else key)
+    if typ == "wikimedia":
+        lang = str(s.get("project", "en.wikipedia" if key.endswith("_en") else "tr.wikipedia")).split(".")[0]
+        return {"tr": "Türkçe Vikipedi", "en": "İngilizce Vikipedi"}.get(lang, f"Vikipedi ({lang})")
+    return {"gdelt": "GDELT haberleri", "google_trends": "Google Trends"}.get(typ, key)
 
 
 def reason_tr(row: dict) -> str:
@@ -52,58 +57,110 @@ def reason_tr(row: dict) -> str:
     if st == "not_found":
         return "kaynakta bulunamadı"
     if st == "empty":
-        return "kaynak veri döndürmedi"
+        return "kaynak bu dönemde eşleşen veri döndürmedi"
     if st == "skipped":
         return "bu kaynak için sorgu tanımlı değil"
     note = " ".join(row.get("notes") or []).lower()
+    if row.get("result") == "insufficient_data":
+        if "kaynak kesintisi" in note:
+            return "kaynağın kendi veri kesintisi nedeniyle karşılaştırmaya yetecek gün kalmadı"
+        return "eksik gün oranı yüksek olduğu için değişim hesaplanmadı"
     if "timeout" in note or "timed out" in note:
         return "kaynak zamanında yanıt vermedi"
-    if "429" in note or "limit" in note:
+    if "429" in note or "too many" in note or "limit" in note:
         return "kaynağın istek sınırına takıldı"
     if "connection" in note:
         return "bağlantı hatası"
-    if row.get("result") == "insufficient_data":
-        return "eksik gün oranı yüksek"
     return "veri alınamadı"
 
 
-def _fmt(v: float | None) -> str:
+def _num(v: float | None) -> str:
     return "-" if v is None else f"{v:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def fact_line(r: dict) -> str:
-    name = f"{r['label']} ({r['source']})"
-    if r.get("baseline_mean") is None:
-        return f"- {name}: {reason_tr(r)}"
-    pct = f"%{r['pct_change']:+.1f}".replace(".", ",") if r.get("pct_change") is not None else "yüzde tanımsız"
-    return (f"- {name}: günlük ortalama {_fmt(r['baseline_mean'])} → {_fmt(r['recent_mean'])}, değişim {pct}, "
-            f"{DIRECTION_TR.get(r.get('direction'), '-')}")
+def _pct(v: float | None) -> str:
+    return "yüzde tanımsız" if v is None else f"%{v:+.1f}".replace(".", ",")
+
+
+def _d(s: str) -> str:
+    y, m, d = s.split("-")
+    return f"{d}.{m}.{y}"
+
+
+def evidence_line(r: dict, names: dict) -> str:
+    return (f"- {r['label']} — {names.get(r['source'], r['source'])}: günlük ortalama {_num(r['baseline_mean'])} "
+            f"({_d(r['baseline_start'])}–{_d(r['baseline_end'])}) → {_num(r['recent_mean'])} "
+            f"({_d(r['recent_start'])}–{_d(r['recent_end'])}), değişim {_pct(r.get('pct_change'))}")
+
+
+def limitations(rows: list[dict], names: dict) -> list[str]:
+    out: list[str] = []
+    by_src: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by_src[r["source"]].append(r)
+    for src, rs in by_src.items():
+        nm = names.get(src, src)
+        weak = [r for r in rs if r.get("signal") == Signal.WEAK]
+        if weak:
+            means = [m for r in weak for m in (r.get("baseline_mean"), r.get("recent_mean")) if m is not None]
+            rng = f" (günlük ortalama {_num(min(means))}–{_num(max(means))})" if means else ""
+            out.append(f"- {nm}: {', '.join(r['label'] for r in weak)} için hacim çok düşük{rng}; "
+                       "değişimler güvenilir değil.")
+        reasons: dict[str, list[str]] = defaultdict(list)
+        for r in rs:
+            if r.get("signal") in (Signal.NO_DATA, Signal.INSUFFICIENT):
+                reasons[reason_tr(r)].append(r["label"])
+        for reason, labels in reasons.items():
+            out.append(f"- {nm}: {', '.join(labels)} — {reason}.")
+        gaps = max((r.get("source_gap_days") or 0) for r in rs)
+        if gaps:
+            out.append(f"- {nm}: kaynağın kendisinde {gaps} günlük veri kesintisi var; bu günler hesaba katılmadı.")
+    if any(k.endswith("_en") or "İngilizce" in v for k, v in names.items()):
+        out.append("- İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.")
+    out.append("- Veriler bilgi merakı ve haber görünürlüğünü ölçer; satış, stok, fiyat veya tüketici talebi "
+               "hakkında bilgi içermez.")
+    out.append("- Sonuçlar tek bir dönem karşılaştırmasına dayanır; mevsimsellik veya uzun vadeli eğilim ayrıca "
+               "incelenmedi.")
+    return out
 
 
 def build_user_prompt(rows: list[dict], context: dict) -> str:
-    """context: brand, season, window, sources (ad -> anlam), flat_threshold_pct."""
+    """context: brand, window, sources (anahtar -> {display, description}), flat_threshold_pct."""
     w = context["window"]
     thr = context.get("flat_threshold_pct", 15)
+    srcs = context["sources"]
+    names = {k: v["display"] for k, v in srcs.items()}
+    up = sorted([r for r in rows if r.get("signal") == Signal.STRONG_UP], key=lambda r: -r["pct_change"])
+    down = sorted([r for r in rows if r.get("signal") == Signal.STRONG_DOWN], key=lambda r: r["pct_change"])
+    flat = [r for r in rows if r.get("signal") == Signal.FLAT]
+
+    def term_list(rs):
+        return "\n".join(f"- {r['label']} ({names.get(r['source'], r['source'])}, {_pct(r['pct_change'])})"
+                         for r in rs) or "- (yok)"
+
     parts = [
         f"Marka: {context['brand'].get('name')} | Pazar: {context['brand'].get('market')} | "
         f"Sezon: {context['brand'].get('season')}",
-        f"Önceki dönem: {w['baseline_start']} – {w['baseline_end']} | Yakın dönem: {w['recent_start']} – {w['recent_end']}",
-        f"Yöntem: yakın dönem günlük ortalaması önceki dönemle karşılaştırıldı. ±%{thr:g} içindeki değişimler "
-        "'belirgin değişim yok' sayıldı.",
+        f"Önceki dönem: {_d(w['baseline_start'])}–{_d(w['baseline_end'])} | "
+        f"Yakın dönem: {_d(w['recent_start'])}–{_d(w['recent_end'])}",
+        f"Yöntem: yakın dönem günlük ortalaması önceki dönemle karşılaştırıldı; ±%{thr:g} içindeki değişimler "
+        "'belirgin değişim yok' sayıldı; düşük hacimli seriler güvenilir sayılmadı.",
         "",
-        "KAYNAKLAR (her biri farklı bir şey ölçer):",
+        "KAYNAKLAR:",
+        *[f"- {v['display']}: {v['description']}" for v in srcs.values()],
+        "",
+        "GÜVENİLİR YÜKSELİŞ:", term_list(up),
+        "",
+        "GÜVENİLİR DÜŞÜŞ:", term_list(down),
+        "",
+        "BELİRGİN DEĞİŞİM YOK:", term_list(flat),
+        "",
+        "KANIT SATIRLARI (2. bölüme aynen kopyala):",
+        "\n".join(evidence_line(r, names) for r in up + down) or "- Güvenilir değişim gösteren ölçüm yok.",
+        "",
+        "SINIRLAR (4. bölüme aynen kopyala):",
+        "\n".join(limitations(rows, names)),
+        "",
+        "Dört başlığı Türkçe yaz.",
     ]
-    for name, desc in context["sources"].items():
-        parts.append(f"- {name}: {desc}")
-    parts.append("")
-    parts.append("ÖLÇÜMLER (Python tarafından hesaplandı ve gruplandı):")
-    for sig, title in GROUP_TITLES:
-        group = [r for r in rows if r.get("signal") == sig]
-        parts.append(f"\n### {title} ({len(group)})")
-        if not group:
-            parts.append("- (yok)")
-            continue
-        group.sort(key=lambda r: -(r.get("pct_change") or 0))
-        parts += [fact_line(r) for r in group]
-    parts += ["", "Bu ölçümlere göre dört başlığı Türkçe yanıtla."]
     return "\n".join(parts)

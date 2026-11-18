@@ -92,7 +92,8 @@ def check_numbers(text: str, rows: list[dict], tol: float = 1.0) -> dict:
 _UP = re.compile(r"yüksel|artış|arttı|artıyor|artan|kazan", re.I)
 _DOWN = re.compile(r"düşüş|düştü|düşüyor|azal|kayb|geril", re.I)
 _CAVEAT = re.compile(r"düşük hacim|güvenilir değil|güvenilmez|gürültü|zayıf|ihtiyat", re.I)
-_MISSING = re.compile(r"alınamadı|veri yok|bulunamadı|unavailable", re.I)
+_MISSING = re.compile(r"alınamadı|veri yok|bulunamadı|unavailable|eksik gün|hesaplanmadı|hesaplanamadı|"
+                      r"veri döndürmedi|veri içermiyor", re.I)
 _BUSINESS = re.compile(r"satış\w*|stok\w*|ciro\w*|sipariş\w*|kâr\b|gelir\w*", re.I)
 _ENGLISH = re.compile(r"\b(therefore|unavailable|however|because|increase[sd]?|decrease[sd]?|popularity|"
                       r"available|insufficient|the|and|with|data)\b", re.I)
@@ -102,49 +103,83 @@ def _lower_tr(s: str) -> str:
     return s.replace("I", "ı").replace("İ", "i").lower()
 
 
-def check_claims(text: str, rows: list[dict]) -> list[str]:
-    """Modelin yön ve 'veri yok' iddialarını hesaplanan sonuçlarla karşılaştırır (basit, satır bazlı).
+def source_aliases(src: str) -> list[str]:
+    """Modelin bir kaynağı yazabileceği biçimler (anahtar, proje adı, Türkçe ad)."""
+    al = {src, src.replace("wikimedia", "wikipedia")}
+    if src.startswith("wikimedia"):
+        if src.endswith("_en"):
+            al |= {"en.wikipedia", "wikipedia.en", "wikipedia_en", "ingilizce vikipedi", "ingilizce wikipedia"}
+        else:
+            al |= {"tr.wikipedia", "wikipedia.tr", "türkçe vikipedi", "türkçe wikipedia"}
+    if src == "gdelt":
+        al |= {"gdelt haberleri"}
+    return sorted(al, key=len, reverse=True)
 
-    - 1-3. bölümlerde bir terim için artış/düşüş iddiası, o terimin hiçbir kaynağında o yön yoksa işaretlenir.
-    - Yön yalnızca düşük hacimli serilerden geliyorsa ve satırda bununla ilgili çekince yoksa işaretlenir.
-    - Bir kaynak-terim için 'veri alınamadı' denmiş ama veri gelmişse işaretlenir.
-    - 1-3. bölümlerde satış/stok/ciro gibi veride olmayan metrikler işaretlenir.
-    - İngilizce kelimeler işaretlenir.
+
+def mentioned_sources(line_low: str, sources: list[str]) -> list[str]:
+    """Satırda geçen kaynaklar; uzun adlar önce eşlenir ('wikimedia_en' içindeki 'wikimedia' ayrıca sayılmaz)."""
+    pairs = sorted(((a, s) for s in sources for a in source_aliases(s)), key=lambda x: len(x[0]), reverse=True)
+    found: list[str] = []
+    work = line_low
+    for alias, src in pairs:
+        if alias in work:
+            work = work.replace(alias, " " * len(alias))
+            if src not in found:
+                found.append(src)
+    return found
+
+
+_COMPARE = re.compile(r"daha (yüksek|düşük|fazla|az|çok)", re.I)
+_COMPUTED = {"computed", "baseline_zero"}
+
+
+def check_claims(text: str, rows: list[dict]) -> list[str]:
+    """Modelin iddialarını hesaplanan sonuçlarla karşılaştırır (basit, satır bazlı denetim).
+
+    - 1-3. bölüm: bir terim için artış/düşüş iddiası, o terimin hiçbir kaynağında o yön yoksa;
+      yön yalnızca düşük hacimli seriden geliyor ve çekince yoksa.
+    - 1-3. bölüm: verisi olmayan bir kaynak-terim kanıt olarak gösterilmişse.
+    - Tüm metin: verisi hesaplanmış bir kaynak-terim için 'veri yok / eksik gün' denmişse.
+    - Tüm metin: iki kaynağın değerleri 'daha yüksek/düşük' diye karşılaştırılmışsa.
+    - 1-3. bölüm: satış/stok/ciro gibi veride olmayan metrikler. Tüm metin: İngilizce kelimeler.
     """
     issues: list[str] = []
     labels = sorted({r["label"] for r in rows}, key=len, reverse=True)
-    sources = sorted({r["source"] for r in rows}, key=len, reverse=True)
+    sources = sorted({r["source"] for r in rows})
+    row = {(r["label"], r["source"]): r for r in rows}
     body = re.split(r"^##\s*4", text, maxsplit=1, flags=re.M)[0]
+    body_lines = set(body.splitlines())
 
-    for line in body.splitlines():
+    for line in text.splitlines():
         low = _lower_tr(line)
+        in_body = line in body_lines
+        srcs = mentioned_sources(low, sources)
+        missing_claim = bool(_MISSING.search(line))
+        if len(srcs) >= 2 and _COMPARE.search(line):
+            issues.append(f"Kaynaklar birbiriyle karşılaştırılmış ({', '.join(srcs)}): \"{line.strip()[:90]}\"")
         for label in labels:
             if _lower_tr(label) not in low:
                 continue
             mine = [r for r in rows if r["label"] == label and r.get("direction")]
-            for regex, d, word in ((_UP, "up", "artış"), (_DOWN, "down", "düşüş")):
-                if not regex.search(line):
+            if in_body:
+                for regex, d, word in ((_UP, "up", "artış"), (_DOWN, "down", "düşüş")):
+                    if not regex.search(line):
+                        continue
+                    matching = [r for r in mine if r["direction"] == d]
+                    if not matching:
+                        found = ", ".join(f"{r['source']}: {r['direction']}" for r in mine) or "hesaplanmadı"
+                        issues.append(f"'{label}' için {word} iddiası var ama hesaplanan yön farklı ({found}).")
+                    elif all(r.get("low_volume") for r in matching) and not _CAVEAT.search(line):
+                        issues.append(f"'{label}' için {word} yalnızca düşük hacimli seride var; çekince yok.")
+            for src in srcs:
+                r = row.get((label, src))
+                if r is None:
                     continue
-                matching = [r for r in mine if r["direction"] == d]
-                if not matching:
-                    found = ", ".join(f"{r['source']}: {r['direction']}" for r in mine) or "hesaplanmadı"
-                    issues.append(f"'{label}' için {word} iddiası var ama hesaplanan yön farklı ({found}).")
-                elif all(r.get("low_volume") for r in matching) and not _CAVEAT.search(line):
-                    issues.append(f"'{label}' için {word} yalnızca düşük hacimli seride var; çekince belirtilmemiş.")
-
-    for line in text.splitlines():
-        if not _MISSING.search(line):
-            continue
-        low = _lower_tr(line)
-        for label in labels:
-            if _lower_tr(label) not in low:
-                continue
-            for src in sources:
-                if src in low:
-                    ok = [r for r in rows if r["label"] == label and r["source"] == src and r.get("fetch_status") == "ok"]
-                    if ok:
-                        issues.append(f"'{label}' için {src} verisi alındığı halde 'veri yok' denmiş.")
-                    break
+                computed = r.get("result") in _COMPUTED
+                if missing_claim and computed:
+                    issues.append(f"'{label}' için {src} verisi hesaplandığı halde 'veri yok/eksik' denmiş.")
+                elif in_body and not missing_claim and not computed:
+                    issues.append(f"'{label}' için {src} verisi yokken kanıt olarak gösterilmiş.")
 
     biz = sorted({m.group(0).lower() for m in _BUSINESS.finditer(body)})
     if biz:
@@ -163,6 +198,23 @@ def check_output(text: str, rows: list[dict]) -> dict:
     return {**nums, "claim_issues": claims, "ok": ok,
             "note": "Yanıt hesaplanan sonuçlarla tutarlı." if ok else
                     "Yanıtta hesaplanan sonuçlarla uyuşmayan ifadeler var; aşağıdaki uyarılara bakın."}
+
+
+def evidence_table(rows: list[dict], names: dict) -> str:
+    """Python'un hesapladığı tüm sonuçlar (modelden bağımsız, doğrulama için)."""
+    sig_tr = {"strong_up": "güvenilir artış", "strong_down": "güvenilir düşüş", "flat": "belirgin değişim yok",
+              "weak": "düşük hacim", "insufficient": "hesaplanamadı", "no_data": "veri yok"}
+    from .prompts import _num, _pct, reason_tr
+    out = ["| Terim | Kaynak | Önceki ort. | Yakın ort. | Değişim | Sınıf |", "|---|---|---:|---:|---:|---|"]
+    order = list(sig_tr)
+    for r in sorted(rows, key=lambda r: (order.index(r.get("signal", "no_data")), r["source"], r["label"])):
+        sig = sig_tr.get(r.get("signal"), "-")
+        if r.get("signal") in ("no_data", "insufficient"):
+            sig += f" ({reason_tr(r)})"
+        pct = _pct(r.get("pct_change")) if r.get("baseline_mean") is not None else "-"
+        out.append(f"| {r['label']} | {names.get(r['source'], r['source'])} | {_num(r.get('baseline_mean'))} | "
+                   f"{_num(r.get('recent_mean'))} | {pct} | {sig} |")
+    return "\n".join(out)
 
 
 def to_markdown(result: dict, meta: dict) -> str:
@@ -186,6 +238,8 @@ def to_markdown(result: dict, meta: dict) -> str:
         result["content"].strip(),
         "",
     ]
+    if result.get("evidence"):
+        lines += ["---", "", "## Ek: Python'un hesapladığı sonuçlar (modelden bağımsız)", "", result["evidence"], ""]
     return "\n".join(lines)
 
 

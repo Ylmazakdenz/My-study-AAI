@@ -22,8 +22,9 @@ class GdeltSource(Source):
 
     @property
     def description(self) -> str:
-        return ("GDELT'in izlediği çevrim içi haberlerde terimin geçtiği günlük haber sayısı (Türkiye kaynaklı, "
-                "Türkçe haberler). Medya/haber görünürlüğünü gösterir; tüketici talebi veya satış değildir.")
+        return ("GDELT'in izlediği çevrim içi haberlerde terimin geçtiği haber sayısı (Türkiye kaynaklı, Türkçe "
+                "haberler); analizde o gün izlenen toplam habere oranlanır (10.000 haberde). Medya/haber "
+                "görünürlüğünü gösterir; tüketici talebi veya satış değildir.")
 
     @property
     def metric(self) -> str:  # type: ignore[override]

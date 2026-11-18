@@ -75,7 +75,7 @@ kapanınca model ve sunucu silinir; her oturumda kurulum hücreleri tekrar çal�
 | Değişken | Varsayılan | Açıklama |
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | Colab'da ve yerel kurulumda aynı |
-| `OLLAMA_MODEL` | `llama3.2` | T4'te `llama3.1:8b` de denenebilir (Türkçesi daha iyi) |
+| `OLLAMA_MODEL` | `llama3.2` | Colab notebook'unda varsayılan `llama3.1:8b` (3B model Türkçe yorumda hata yaptı) |
 | `OLLAMA_TEMPERATURE` | `0.2` | Düşük = daha tutarlı, daha az uydurma |
 | `CONTACT_EMAIL` | boş | Wikimedia User-Agent için önerilir |
 
@@ -103,11 +103,19 @@ Kontrol tarihi: **2026-11-19**. Kaynak: resmi belgeler (bağlantılar tabloda).
   İki örnek olarak kullanılır:
   - `wikimedia` (Türkçe Vikipedi): Türkiye'ye en yakın sinyal, ancak ilk gerçek çalıştırmada (18.11.2026) giyim
     makaleleri günde yalnızca **1,5–8 görüntüleme** aldı; bu hacimde yüzde değişimler gürültüdür.
-  - `wikimedia_en` (İngilizce Vikipedi): dünya geneli ilgi, hacim yüksek; değişimler istatistiksel olarak daha anlamlı.
-- **Destek kaynağı: GDELT** — aynı terimlerin haber görünürlüğü; anahtar yok. Sınırı: Türkçe moda haberleri az
-  olduğundan bazı terimlerde hacim düşük kalabilir (kod bunu "düşük hacim" olarak işaretler). İlk çalıştırmada
-  Colab'dan zaman aşımı ve 429 (hız sınırı) aldı; bu yüzden 90 sn zaman aşımı, istekler arası 8 sn ve
-  15/30/45 sn bekleyerek 3 tekrar deneme eklendi (`config.yaml` → `sources.gdelt`).
+  - `wikimedia_en` (İngilizce Vikipedi): dünya geneli ilgi, hacim yüksek (günde 120–400 görüntüleme);
+    değişimler daha anlamlı. 2. denemede Colab'dan iki istek 429 (çok fazla istek) aldı → istekler arası 2 sn,
+    sunucunun `Retry-After` süresine uyan 20/40/60 sn bekleyerek tekrar deneme ve iletişim bilgili User-Agent eklendi.
+- **Destek kaynağı: GDELT** — aynı terimlerin haber görünürlüğü; anahtar yok. Gerçek çalıştırmalarda görülenler:
+  - 1. denemede zaman aşımı ve 429 (hız sınırı) → 90 sn zaman aşımı, istekler arası 8 sn, 15/30/45 sn bekleyerek
+    3 tekrar deneme eklendi.
+  - 2. denemede 56 günün yalnızca 39'unda veri geldi; eksik günler **tüm terimlerde aynı** ve o günlerde GDELT
+    toplam izlenen haber sayısını (`norm`) da vermiyor → bu GDELT'in kendi kesintisi. Kod bu günleri kaynak
+    kesintisi olarak tanır ve kapsama hesabından çıkarır (sıfır saymaz).
+  - Ayrıca yakın dönemde GDELT'in izlediği toplam haber sayısı önceki dönemin yarısının altına indi (ort. 95.548 →
+    40.766). Ham sayılar bu yüzden yapay olarak %35–75 "düşüyordu". Artık değerler izlenen toplam habere oranlanır
+    (10.000 haberde) ve izleme hacmi çok düşük günler bozuk sayılır. Bu düzeltmelerden sonra örnek çalıştırmada
+    GDELT için karşılaştırmaya yetecek gün kalmadı → sonuç "hesaplanamadı" (dürüst sonuç).
 - **Google Trends: deneysel** — ürün seçimi için en anlamlı veri olduğu için adaptörü hazır (`enabled: false`).
   Resmi alfa erişimine başvurulmalı; o zamana kadar pytrends ile denenir, engellenirse hata açıkça raporlanır.
 - Pinterest (onay + terim sorgulanamıyor), YouTube (zaman serisi yok) ve Reddit (onay kapanıyor) bu aşamada
@@ -180,6 +188,9 @@ Yanıt otomatik denetlenir; sorun varsa `interpretation.md` başında ⚠️ ile
 - 1-3. bölümlerde satış, stok, ciro gibi veride olmayan metrikler,
 - İngilizce kelimeler.
 
+`interpretation.md` sonuna, modelden bağımsız olarak Python'un hesapladığı tüm sonuçların tablosu eklenir;
+model yanılsa da okuyucu doğru sayıları görür.
+
 Bu denetim, ilk Colab denemesinde `llama3.2`'nin yaptığı hataların (yatay terimlere "popülerlik kazanıyor",
 verisi olan terimlere "veri alınamadı", Türkçe-İngilizce karışık yanıt) yakalanması için eklendi
 (`tests/test_pipeline.py::test_claim_check_catches_colab_mistakes`).
@@ -218,6 +229,6 @@ python -m pytest -q
 
 ## 7. Bilinen sınırlar / sonraki adımlar
 
-- Vikipedi makale başlıkları `config.yaml`'da tahmini yazıldı; `not_found` dönenler düzeltilmeli.
+- Örnek çalıştırma: `data/sample/20261118-231912/` (Colab, 18.11.2026; analiz güncel ayarlarla yeniden hesaplandı).
 - Google Trends resmi API alfa başvurusu yapılmalı.
 - Sonraki aşama: MCP sunucusu olarak veri araçları, RAG (marka kataloğu), ürün eşleştirme.

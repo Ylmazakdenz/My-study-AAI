@@ -201,6 +201,7 @@ def _colab_rows():
 
 
 def test_claim_check_catches_colab_mistakes():
+    """1. Colab denemesindeki llama3.2 hataları."""
     from trendpipe.llm import check_output
     bad = ("## 1. Öne çıkan terimler\n- Palto: popülerlik kazanıyor.\n- Kazak: popülerlik kazanıyor.\n"
            "## 4. Bu veriyle söyleyemediklerimiz\n"
@@ -210,33 +211,91 @@ def test_claim_check_catches_colab_mistakes():
     assert not chk["ok"]
     assert "'Palto' için artış" in joined                    # yatay terime yükseliş denmiş
     assert "'Kazak' için artış yalnızca düşük hacimli" in joined
-    assert "'Trençkot' için wikimedia verisi alındığı halde" in joined
+    assert "'Trençkot' için wikimedia verisi hesaplandığı halde" in joined
     assert "therefore" in joined
     assert "satış" in " ".join(check_output("## 1. X\n- Satışlar artacak.\n", _colab_rows())["claim_issues"])
 
 
+def test_claim_check_on_real_run2_answer():
+    """2. Colab denemesindeki gerçek llama3.2 yanıtı + aynı çalıştırmanın gerçek verisi (data/sample)."""
+    import json
+    from pathlib import Path
+    from trendpipe.llm import check_output
+    root = Path(__file__).resolve().parents[1]
+    rows = json.loads((root / "data/sample/20261118-231912/analysis.json").read_text(encoding="utf-8"))["rows"]
+    text = (root / "tests/fixtures/llama32_run2_response.md").read_text(encoding="utf-8")
+    joined = " ".join(check_output(text, rows)["claim_issues"])
+    assert "'Trençkot' için gdelt verisi yokken kanıt" in joined          # 2. bölüm, veri yok
+    assert "Kaynaklar birbiriyle karşılaştırılmış" in joined              # tr vs en karşılaştırması
+    assert "'Hırka' için wikimedia verisi hesaplandığı halde" in joined    # 'eksik gün' iddiası
+    assert "satış" in joined
+
+
 def test_claim_check_accepts_correct_answer():
     from trendpipe.llm import check_output
-    good = ("## 1. Öne çıkan terimler\n- Güvenilir yükseliş gösteren terim yok.\n"
+    good = ("## 1. Öne çıkan terimler\n- Güvenilir bir değişim gösteren terim yok.\n"
             "- Kazak (wikimedia) %+56,1 arttı ancak düşük hacim nedeniyle güvenilir değil.\n"
             "## 4. Bu veriyle söyleyemediklerimiz\n- Trençkot için gdelt verisi alınamadı.\n")
     chk = check_output(good, _colab_rows())
     assert chk["ok"], chk
 
 
+def _ctx():
+    return {"brand": {"name": "B", "market": "TR", "season": "KŞ"},
+            "window": {"baseline_start": "2026-09-22", "baseline_end": "2026-10-19",
+                       "recent_start": "2026-10-20", "recent_end": "2026-11-16"},
+            "sources": {"wikimedia": {"display": "Türkçe Vikipedi", "description": "x"},
+                        "gdelt": {"display": "GDELT haberleri", "description": "y"}}}
+
+
 def test_prompt_groups_and_reasons():
     from trendpipe.prompts import build_user_prompt
-    ctx = {"brand": {"name": "B", "market": "TR", "season": "KŞ"},
-           "window": {"baseline_start": "a", "baseline_end": "b", "recent_start": "c", "recent_end": "d"},
-           "sources": {"wikimedia": "x", "gdelt": "y"}}
-    p = build_user_prompt(_colab_rows(), ctx)
-    weak = p.split("### Düşük hacim")[1].split("###")[0]
-    assert "Kazak (wikimedia)" in weak and "%+56,1" in weak
-    nodata = p.split("### Veri yok")[1]
-    assert "Trençkot (gdelt): kaynak zamanında yanıt vermedi" in nodata
-    assert "Kazak (gdelt): kaynağın istek sınırına takıldı" in nodata
-    assert "Read timed out" not in p                           # ham hata metni modele gitmez
-    assert "### Güvenilir yükseliş (0)" in p
+    rows = _colab_rows()
+    for r in rows:
+        r.update({k: v for k, v in _ctx()["window"].items()})
+    p = build_user_prompt(rows, _ctx())
+    assert "GÜVENİLİR YÜKSELİŞ:\n- (yok)" in p                      # Kazak düşük hacimli -> güvenilir değil
+    limits = p.split("SINIRLAR")[1]
+    assert "Türkçe Vikipedi: Kazak, Kot pantolon, Palto, Trençkot için hacim çok düşük" in limits
+    assert "GDELT haberleri: Trençkot — kaynak zamanında yanıt vermedi" in limits
+    assert "GDELT haberleri: Kazak — kaynağın istek sınırına takıldı" in limits
+    assert "Read timed out" not in p                               # ham hata metni modele gitmez
+
+
+def test_display_names():
+    from trendpipe.prompts import display_name
+    assert display_name("wikimedia_en", {"settings": {"type": "wikimedia", "project": "en.wikipedia"}}) == \
+        "İngilizce Vikipedi"
+    assert display_name("wikimedia", {"settings": {}}) == "Türkçe Vikipedi"
+    assert display_name("gdelt") == "GDELT haberleri"
+
+
+# ---------- kaynak kesintisi ve GDELT normalizasyonu ----------
+
+def test_source_wide_gap_excluded(cfg):
+    from datetime import timedelta
+    from trendpipe.analysis import analyze_series, source_gap_days
+    w = window(cfg)
+    missing = {w.start + timedelta(days=i) for i in (1, 2, 9)}            # tüm terimlerde aynı günler eksik
+    series = [[Point(w.start + timedelta(days=i), v) for i in range(14)
+               if w.start + timedelta(days=i) not in missing] for v in (1, 2, 3)]
+    gaps = source_gap_days(series, w)
+    assert gaps == missing
+    r = analyze_series(series[0], w, gap_days=gaps)
+    assert r["result"] == Result.COMPUTED and r["baseline_coverage"] == 1.0 and r["source_gap_days"] == 3
+    assert analyze_series(series[0], w)["result"] == Result.INSUFFICIENT   # kesinti bilinmezse hesaplanmaz
+
+
+def test_gdelt_normalized_by_monitored_volume():
+    from trendpipe.analysis import normalize_by_norm
+    d = date(2026, 1, 1)
+    from datetime import timedelta
+    pts = [Point(d + timedelta(days=i), 10, {"norm": 100_000}) for i in range(5)] + \
+          [Point(d + timedelta(days=5), 5, {"norm": 50_000}), Point(d + timedelta(days=6), 1, {"norm": 100})]
+    (out,), dropped = normalize_by_norm([pts], min_norm_ratio=0.2)
+    assert dropped == 1                                   # izleme hacmi çok düşük gün çıkarıldı
+    assert [round(p.value, 3) for p in out] == [1.0] * 6  # ham sayı yarıya inse de oran aynı
+    assert out[-1].extra["raw"] == 5
 
 
 # ---------- tekrar deneme ve çoklu kaynak örneği ----------

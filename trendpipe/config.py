@@ -118,10 +118,15 @@ def llm_settings() -> dict:
     }
 
 
+PROJECT_URL = "https://github.com/Ylmazakdenz/My-study-AAI"
+
+
 def user_agent() -> str:
+    """Wikimedia politikası: '<istemci>/<sürüm> (<iletişim>) <kütüphane>'. İletişim bilgisi olmayan istemciler
+    daha sıkı hız sınırına takılabilir; e-posta verilmezse proje adresi iletişim olarak yazılır."""
     contact = os.getenv("CONTACT_EMAIL", "").strip()
-    contact_part = f" ({contact})" if contact else ""
-    return f"SENG360-trendpipe/0.1{contact_part} python-requests"
+    contact_part = f"{PROJECT_URL}; {contact}" if contact else PROJECT_URL
+    return f"SENG360-trendpipe/0.1 ({contact_part}) python-requests"
 
 
 _TR = str.maketrans("çğıöşüÇĞİÖŞÜ ", "cgiosuCGIOSU_")

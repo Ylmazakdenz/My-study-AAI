@@ -58,6 +58,7 @@ sources:
     request_interval_sec: 2
     max_retries: 3
     retry_backoff_sec: 20
+    stop_after_consecutive_429: 3
   gdelt:
     type: gdelt
     enabled: true
@@ -68,8 +69,11 @@ sources:
     # GDELT yavaş yanıt verebilir ve sık isteği 429 ile reddeder: uzun zaman aşımı + bekleyerek tekrar deneme.
     request_interval_sec: 8
     timeout_sec: 90
-    max_retries: 3
-    retry_backoff_sec: 15  # 15, 30, 45 sn bekleyerek tekrar dener
+    max_retries: 2
+    retry_backoff_sec: 15  # 15, 30 sn bekleyerek tekrar dener
+    # 3. Colab denemesinde (18.11.2026) GDELT tüm terimlerde 4 denemeye rağmen 429 verdi ve terim başına ~2 dk
+    # beklendi (toplam ~13 dk). Art arda 2 terim 429 alırsa kalan terimler denenmez, durum kaydedilir.
+    stop_after_consecutive_429: 2
   google_trends:
     type: google_trends
     # Resmi API henüz kapalı alfa; bu adaptör resmi olmayan pytrends kütüphanesini kullanır ve engellenebilir.

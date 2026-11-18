@@ -129,6 +129,16 @@ def mentioned_sources(line_low: str, sources: list[str]) -> list[str]:
     return found
 
 
+# 4. bölüm başlığı: "## 4.", "**4. ...**", "4) ..." gibi biçimlerin hepsi (model biçimi her zaman korumuyor).
+_SECTION4 = re.compile(r"^\s*(?:#+\s*|\*\*\s*)?4\s*[.)]", re.M)
+
+
+def split_sections(text: str) -> tuple[str, str]:
+    """(1-3. bölümler, 4. bölüm)."""
+    m = _SECTION4.search(text)
+    return (text[:m.start()], text[m.start():]) if m else (text, "")
+
+
 _COMPARE = re.compile(r"daha (yüksek|düşük|fazla|az|çok)", re.I)
 _COMPUTED = {"computed", "baseline_zero"}
 
@@ -147,7 +157,7 @@ def check_claims(text: str, rows: list[dict]) -> list[str]:
     labels = sorted({r["label"] for r in rows}, key=len, reverse=True)
     sources = sorted({r["source"] for r in rows})
     row = {(r["label"], r["source"]): r for r in rows}
-    body = re.split(r"^##\s*4", text, maxsplit=1, flags=re.M)[0]
+    body = split_sections(text)[0]
     body_lines = set(body.splitlines())
 
     for line in text.splitlines():

@@ -348,11 +348,46 @@ def test_offline_reanalysis_of_sample_matches_committed(tmp_path):
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
     shutil.copytree(root / "data/sample", tmp_path / "sample")
-    assert cli.main(["analyze", "--config", str(root / "config/config.yaml"),
-                     "--out-dir", str(tmp_path / "sample"), "--run", "latest"]) == 0
 
     def load(p):
         return {(r["source"], r["term_id"]): (r["result"], r.get("pct_change"))
                 for r in json.loads(p.read_text(encoding="utf-8"))["rows"]}
-    rel = "20261118-231912/analysis.json"
-    assert load(tmp_path / "sample" / rel) == load(root / "data/sample" / rel)
+    runs = sorted(p.parent.name for p in (root / "data/sample").glob("*/manifest.json"))
+    assert len(runs) >= 2
+    for run in runs:
+        assert cli.main(["analyze", "--config", str(root / "config/config.yaml"),
+                         "--run", str(tmp_path / "sample" / run)]) == 0
+        rel = f"{run}/analysis.json"
+        assert load(tmp_path / "sample" / rel) == load(root / "data/sample" / rel), run
+
+
+def test_claim_check_bold_headings_real_run3():
+    """3. Colab denemesi (llama3.1:8b): başlıklar '**4. ...**' biçiminde geldi; eski denetim 4. bölümü
+    ayıramadığı için sınırlar listesini hata sanıyordu (yanlış alarm). İçerik doğru olduğundan ✅ beklenir."""
+    import json
+    from pathlib import Path
+    from trendpipe.llm import check_output, split_sections
+    root = Path(__file__).resolve().parents[1]
+    rows = json.loads((root / "data/sample/20261118-233854/analysis.json").read_text(encoding="utf-8"))["rows"]
+    text = (root / "tests/fixtures/llama31_8b_run3_response.md").read_text(encoding="utf-8")
+    assert "kaynağın istek sınırına takıldı" in split_sections(text)[1]
+    chk = check_output(text, rows)
+    assert chk["ok"], chk
+
+
+def test_stops_after_consecutive_429(cfg, tmp_path, monkeypatch):
+    import json
+    w = window(cfg)
+    cfg["sources"] = {"gdelt": {"enabled": True, "request_interval_sec": 0, "stop_after_consecutive_429": 2}}
+    cfg["terms"] = [{"id": f"t{i}", "label": f"T{i}", "queries": {"gdelt": f"q{i}"}} for i in range(4)]
+    sess = FakeSession({}, default=FakeResponse(429, "Please limit requests"))
+    import trendpipe.sources as srcmod
+    orig = srcmod.build_sources
+    monkeypatch.setattr(cli, "build_sources", lambda c, only=None, user_agent="": orig(c, only, user_agent, sess))
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    assert cli.main(["fetch", "--config", str(p), "--out-dir", str(tmp_path / "r"), "--end", END.isoformat()]) == 0
+    m = json.loads(next((tmp_path / "r").iterdir()).joinpath("manifest.json").read_text(encoding="utf-8"))
+    assert len(sess.calls) == 2                                   # 3. ve 4. terim denenmedi
+    assert all(f["status"] == "error" for f in m["fetches"])
+    assert "Denenmedi" in m["fetches"][2]["error"] and m["fetches"][2]["attempts"] == 0

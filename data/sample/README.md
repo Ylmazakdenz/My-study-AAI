@@ -1,6 +1,15 @@
 # Örnek çalıştırmalar
 
+`--run latest` en yeni klasörü (20261118-233854) seçer; diğerini `--run data/sample/20261118-231912` ile verin.
+
+## 20261118-233854 (en yeni, önerilen)
+Colab, 18.11.2026, tekrar deneme kodunun eklendiği sürüm. **Türkçe ve İngilizce Vikipedi'nin 12 isteğinin hepsi
+başarılı.** GDELT'te 5 terim 4 denemeye rağmen 429 (hız sınırı), 1 terim boş yanıt — hata kaydı olarak olduğu gibi
+bırakıldı. `interpretation.md`: `llama3.1:8b` yorumu. Model yanıtı değiştirilmedi; tutarlılık kontrolü, '**4.**'
+biçimindeki başlığı tanımayan eski denetimin yanlış alarmı düzeltildikten sonra yeniden çalıştırıldı (✅).
+
 ## 20261118-231912
+GDELT kesinti ve izleme hacmi düşüşü örneği.
 Colab'da 18.11.2026'da gerçek kaynaklardan çekildi (Türkçe Vikipedi, İngilizce Vikipedi, GDELT).
 Dönem 22.09.2026 – 16.11.2026. `raw/` ham yanıtları, `manifest.json` her isteğin kaynağını, dönemini, çekilme
 zamanını ve durumunu içerir (İngilizce Vikipedi'de 2 istek 429, GDELT'te 2 terim boş yanıt — olduğu gibi bırakıldı).

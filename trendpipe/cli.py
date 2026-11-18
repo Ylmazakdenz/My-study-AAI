@@ -69,13 +69,23 @@ def cmd_fetch(args) -> Path:
     terms_by_id = {t.id: t for t in terms}
     results, records = [], []
     for src in sources:
+        # Kaynak art arda hız sınırı (429) döndürürse kalan terimler denenmez: aynı sonucu almak için
+        # dakikalarca beklemek yerine durumu açıkça kaydederiz (ör. Colab'ın ortak IP'si GDELT'te sınırda).
+        limit = int(src.settings.get("stop_after_consecutive_429", 0) or 0)
+        streak = 0
         for t in terms:
             q = t.queries.get(src.name)
-            if not q:
+            if q and limit and streak >= limit:
+                res = src._result(t.id, q, window.start, window.end, status=FetchStatus.ERROR, attempts=0,
+                                  error=f"Denenmedi: bu kaynak art arda {streak} istekte hız sınırına (HTTP 429) "
+                                        "takıldı. Daha sonra ya da başka bir ağdan tekrar deneyin.")
+            elif not q:
                 res = src._result(t.id, "", window.start, window.end, status=FetchStatus.SKIPPED,
                                   error=f"Bu terim için '{src.name}' sorgusu tanımlı değil")
             else:
                 res = src.fetch(t.id, q, window.start, window.end)
+            if q and res.attempts:
+                streak = streak + 1 if res.http_status == 429 else 0
             raw_file = save_raw(run_dir, res)
             rec = {**res.meta(), "label": t.label, "category": t.category, "raw_file": raw_file}
             records.append(rec)

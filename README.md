@@ -123,6 +123,10 @@ bilgiler "(ikincil kaynak)" olarak işaretlendi.
     40.766). Ham sayılar bu yüzden yapay olarak %35–75 "düşüyordu". Artık değerler izlenen toplam habere oranlanır
     (10.000 haberde) ve izleme hacmi çok düşük günler bozuk sayılır. Bu düzeltmelerden sonra örnek çalıştırmada
     GDELT için karşılaştırmaya yetecek gün kalmadı → sonuç "hesaplanamadı" (dürüst sonuç).
+  - 3. denemede Colab'dan tüm terimler 4 denemeye rağmen 429 aldı; terim başına ~2 dk beklendi (toplam ~13 dk).
+    Colab'ın ortak IP adresi GDELT'in sınırına takılıyor. Artık 2 tekrar deneme yapılır ve art arda 2 terim 429
+    alırsa kalan terimler denenmez (`stop_after_consecutive_429`), durum kaydedilir. GDELT için veri çekmeyi kendi
+    bilgisayarınızdan yapmanız önerilir.
 - **Google Trends: deneysel** — ürün seçimi için en anlamlı veri olduğu için adaptörü hazır (`enabled: false`).
   Resmi alfa erişimine başvurulmalı; o zamana kadar pytrends ile denenir, engellenirse hata açıkça raporlanır.
 - Pinterest (onay + terim sorgulanamıyor), YouTube (zaman serisi yok) ve Reddit (onay kapanıyor) bu aşamada
@@ -242,6 +246,6 @@ python -m pytest -q
 - Mevsimsellik: Eylül→Kasım artışı her yıl görülen mevsimsel artış olabilir; geçen yılın aynı dönemiyle
   karşılaştırma eklenmeli (Wikimedia 2015'ten beri veri veriyor).
 
-- Örnek çalıştırma: `data/sample/20261118-231912/` (Colab, 18.11.2026; analiz güncel ayarlarla yeniden hesaplandı).
+- Örnek çalıştırmalar: `data/sample/` (Colab, 18.11.2026; iki gerçek çalıştırma, açıklama klasördeki README'de).
 - Google Trends resmi API alfa başvurusu yapılmalı.
 - Sonraki aşama: MCP sunucusu olarak veri araçları, RAG (marka kataloğu), ürün eşleştirme.

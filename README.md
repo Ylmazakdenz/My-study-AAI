@@ -14,6 +14,8 @@ hesaplanan sonuçları yorumlar.
 
 ## 1. Hızlı başlangıç
 
+Gereksinim: **Python 3.10 veya üstü** (Colab'da hazır). Model adımı için Ollama (Colab notebook'u kurar).
+
 ### A) Kendi bilgisayarında (PyCharm / terminal) — veri çekme + analiz
 
 ```bash
@@ -53,6 +55,10 @@ python -m trendpipe analyze   --out-dir data/sample --run latest
 python -m trendpipe interpret --out-dir data/sample --run latest   # model gerekir
 ```
 
+`analyze`, analiz ayarlarını varsayılan olarak güncel `config/config.yaml`'dan alır; böylece yöntemde yapılan
+düzeltmeler eski kayıtlara da uygulanır. Çalıştırma anındaki ayarlarla birebir tekrar için `--use-run-config`.
+Hangi ayarların kullanıldığı her zaman `analysis.json` içine yazılır.
+
 ---
 
 ## 2. Model bağlantısı (hocanın yöntemi)
@@ -75,7 +81,7 @@ kapanınca model ve sunucu silinir; her oturumda kurulum hücreleri tekrar çal�
 | Değişken | Varsayılan | Açıklama |
 |---|---|---|
 | `OLLAMA_HOST` | `http://localhost:11434` | Colab'da ve yerel kurulumda aynı |
-| `OLLAMA_MODEL` | `llama3.2` | Colab notebook'unda varsayılan `llama3.1:8b` (3B model Türkçe yorumda hata yaptı) |
+| `OLLAMA_MODEL` | `llama3.2` | Colab notebook'unda varsayılan `llama3.1:8b`. Hocanın notebook'u T4 için iki modeli de önerir ("Llama 3.2 (3B) or Llama 3.1 (8B)"); 3B model Türkçe yorumda hata yaptığı için 8B seçildi |
 | `OLLAMA_TEMPERATURE` | `0.2` | Düşük = daha tutarlı, daha az uydurma |
 | `CONTACT_EMAIL` | boş | Wikimedia User-Agent için önerilir |
 
@@ -85,16 +91,17 @@ Anahtar/şifre gerekmez; `.env` repoya girmez.
 
 ## 3. Veri kaynakları karşılaştırması
 
-Kontrol tarihi: **2026-11-19**. Kaynak: resmi belgeler (bağlantılar tabloda).
+Kontrol tarihi: **19.11.2026** (her satırın "Kanıt" sütununda da yazılı). Kaynak: resmi belgeler; resmi olmayan
+bilgiler "(ikincil kaynak)" olarak işaretlendi.
 
 | Kaynak | Verinin anlamı | Otomatik erişim | Gereksinim | Kapsam (TR / dönem) | Giyime katkı | Kanıt |
 |---|---|---|---|---|---|---|
-| **Google Trends** | Google aramalarında göreli ilgi (0-100) | Resmi API **kapalı alfa** (24.07.2025'te duyuruldu, başvuruyla). `pytrends` resmi değil, Nisan 2025'te arşivlendi, sık 429 | Alfa için başvuru; pytrends anahtarsız ama engellenebilir | TR var; günlük seri ~9 aya kadar | **En güçlü sinyal**: ürün/stil arama ilgisi | [Trends API alfa](https://developers.google.com/search/apis/trends), [duyuru](https://developers.google.com/search/blog/2025/07/trends-api) |
-| **Pinterest Trends** | Pinterest aramalarında göreli hacim; haftalık 1 yıllık seri + haftalık/aylık/yıllık büyüme | `GET /v5/trends/keywords/{region}/top/{trend_type}` | İşletme hesabı + uygulama + OAuth; uç nokta sınırlı kullanıcıya açık | Bölge listesinde TR resmi sayfada doğrulanamadı; yalnız bugünün verisi | Modaya çok uygun (stil keşfi) ama **terim sorgulanamaz**, sadece en trend listesi döner | [Trends API](https://developers.pinterest.com/docs/analytics-and-reports/trends/) |
-| **YouTube Data API v3** | Video izlenme/beğeni **toplamları** (anlık) | Resmi REST API | Ücretsiz API anahtarı; günlük 10.000 birim, `search.list` 100 birim | TR (`regionCode`) var; zaman serisi **yok** | Stil videolarına ilgi; ama trend için zaman içinde tekrar tekrar çekmek gerekir | [Kota maliyetleri](https://developers.google.com/youtube/v3/determine_quota_cost) |
-| **Wikimedia Analytics** | Vikipedi makalesinin günlük görüntülenmesi (bot hariç) | Resmi REST API, `per-article` uç noktası | Anahtar yok; **User-Agent zorunlu**; istekler sırayla | tr.wikipedia ≈ Türkçe okuyucu; 2015'ten bugüne günlük | Ürün tipine (trençkot, hırka...) duyulan **merak**; satın alma niyeti değil | [Analytics API](https://doc.wikimedia.org/analytics-api/), [erişim politikası](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/documentation/access-policy.html) |
-| **GDELT DOC 2.0** | Haberlerde terimin geçtiği **haber sayısı** (ya da tüm haberler içindeki %) | Resmi uç nokta `api/v2/doc/doc`, `timelinevolraw` | Anahtar yok; sık istek engellenir (biz 6 sn bekliyoruz) | `sourcecountry:turkey sourcelang:turkish`; varsayılan son 3 ay, `timespan` ile 1 yıla kadar | Medya/moda gündemi (bir ürün haberlerde konuşuluyor mu) | [DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/), [1 yıl arama](https://blog.gdeltproject.org/doc-geo-2-0-api-updates-full-year-searching-and-more/) |
-| **Reddit** | Gönderi/yorum içerikleri | Resmi Data API (OAuth) | Kullanımdan önce **açık onay** şart; ticari kullanım sözleşmeli. İkincil kaynaklar yeni başvuruların 31.10.2026'da kapandığını bildiriyor | Türkiye/Türkçe kapsamı zayıf | Düşük | [Data API Terms](https://www.redditinc.com/policies/data-api-terms) |
+| **Google Trends** | Google aramalarında göreli ilgi (0-100) | Resmi API **kapalı alfa** (24.07.2025'te duyuruldu, başvuruyla). `pytrends` resmi değil; Nisan 2025'te arşivlendiği bildiriliyor (ikincil kaynak), sık 429 | Alfa için başvuru; pytrends anahtarsız ama engellenebilir | TR (`geo=TR`) var; geçmiş dönem sorgulanabilir | **En güçlü sinyal**: ürün/stil arama ilgisi | [Trends API alfa](https://developers.google.com/search/apis/trends), [duyuru](https://developers.google.com/search/blog/2025/07/trends-api) — 19.11.2026 |
+| **Pinterest Trends** | Pinterest aramalarında göreli hacim; haftalık 1 yıllık seri + haftalık/aylık/yıllık büyüme | `GET /v5/trends/keywords/{region}/top/{trend_type}` | İşletme hesabı + uygulama + OAuth; uç nokta sınırlı kullanıcıya açık | Bölge listesinde TR resmi sayfada doğrulanamadı; yalnız bugünün verisi | Modaya çok uygun (stil keşfi) ama **terim sorgulanamaz**, sadece en trend listesi döner | [Trends API](https://developers.pinterest.com/docs/analytics-and-reports/trends/) — 19.11.2026 |
+| **YouTube Data API v3** | Video izlenme/beğeni **toplamları** (anlık) | Resmi REST API | Ücretsiz API anahtarı; günlük 10.000 birim, `search.list` 100 birim | `chart=mostPopular` + `regionCode=TR` var (1 birim); geçmiş izlenme serisi **yok**, yalnız anlık istatistik | Stil videolarına ilgi; ama trend için zaman içinde tekrar tekrar çekmek gerekir | [Kota maliyetleri](https://developers.google.com/youtube/v3/determine_quota_cost), [videos.list](https://developers.google.com/youtube/v3/docs/videos/list) — 19.11.2026 |
+| **Wikimedia Analytics** | Vikipedi makalesinin günlük görüntülenmesi (bot hariç) | Resmi REST API, `per-article` uç noktası | Anahtar yok; **User-Agent zorunlu**; istekler sırayla | tr.wikipedia ≈ Türkçe okuyucu; 2015'ten bugüne günlük | Ürün tipine (trençkot, hırka...) duyulan **merak**; satın alma niyeti değil | [Analytics API](https://doc.wikimedia.org/analytics-api/), [erişim politikası](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/documentation/access-policy.html) — 19.11.2026 |
+| **GDELT DOC 2.0** | Haberlerde terimin geçtiği **haber sayısı** (ya da tüm haberler içindeki %) | Resmi uç nokta `api/v2/doc/doc`, `timelinevolraw` | Anahtar yok; sık istek engellenir (biz 6 sn bekliyoruz) | `sourcecountry:turkey sourcelang:turkish`; varsayılan son 3 ay, `timespan` ile 1 yıla kadar | Medya/moda gündemi (bir ürün haberlerde konuşuluyor mu) | [DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/), [1 yıl arama](https://blog.gdeltproject.org/doc-geo-2-0-api-updates-full-year-searching-and-more/) — 19.11.2026 |
+| **Reddit** | Gönderi/yorum içerikleri | Resmi Data API (OAuth) | Kullanımdan önce **açık onay** şart; ticari kullanım sözleşmeli. Yeni başvuruların 31.10.2026'da kapandığı bildiriliyor (ikincil kaynak) | Türkiye/Türkçe kapsamı zayıf | Düşük | [Data API Terms](https://www.redditinc.com/policies/data-api-terms) — 19.11.2026 |
 
 ### Seçim
 
@@ -228,6 +235,12 @@ python -m pytest -q
 ---
 
 ## 7. Bilinen sınırlar / sonraki adımlar
+
+- Takım reposuna taşırken değiştirilecek iki yer: `notebooks/colab_run.ipynb` (4. hücre, `REPO`) ve
+  `trendpipe/config.py` (`PROJECT_URL`, Wikimedia User-Agent iletişim adresi).
+- Google Trends adaptörü henüz gerçek istekle denenmedi (deneysel, kapalı).
+- Mevsimsellik: Eylül→Kasım artışı her yıl görülen mevsimsel artış olabilir; geçen yılın aynı dönemiyle
+  karşılaştırma eklenmeli (Wikimedia 2015'ten beri veri veriyor).
 
 - Örnek çalıştırma: `data/sample/20261118-231912/` (Colab, 18.11.2026; analiz güncel ayarlarla yeniden hesaplandı).
 - Google Trends resmi API alfa başvurusu yapılmalı.

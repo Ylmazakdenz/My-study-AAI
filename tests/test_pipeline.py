@@ -339,3 +339,20 @@ def test_two_wikimedia_instances():
     assert [s.name for s in srcs] == ["wikimedia", "wikimedia_en"]
     assert "/en.wikipedia/" in srcs[1].build_url("Trench coat", date(2026, 1, 1), date(2026, 1, 2))
     assert "İngilizce" in srcs[1].description
+
+
+def test_offline_reanalysis_of_sample_matches_committed(tmp_path):
+    """README'deki 'bağlantı olmadan tekrar' komutu, repodaki örnek analizle aynı sonucu vermeli."""
+    import json
+    import shutil
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    shutil.copytree(root / "data/sample", tmp_path / "sample")
+    assert cli.main(["analyze", "--config", str(root / "config/config.yaml"),
+                     "--out-dir", str(tmp_path / "sample"), "--run", "latest"]) == 0
+
+    def load(p):
+        return {(r["source"], r["term_id"]): (r["result"], r.get("pct_change"))
+                for r in json.loads(p.read_text(encoding="utf-8"))["rows"]}
+    rel = "20261118-231912/analysis.json"
+    assert load(tmp_path / "sample" / rel) == load(root / "data/sample" / rel)

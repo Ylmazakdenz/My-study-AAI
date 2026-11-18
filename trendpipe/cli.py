@@ -111,9 +111,12 @@ def _window_from_manifest(m: dict) -> Window:
 def cmd_analyze(args, run_dir: Path | None = None) -> Path:
     run_dir = run_dir or resolve_run_dir(args.run, args.out_dir)
     manifest = read_json(run_dir / "manifest.json")
-    # Analiz ayarları: --config verilirse oradan, yoksa çalıştırma anındaki ayarlar (tekrarlanabilirlik).
-    cfg = load_config(args.config) if getattr(args, "use_current_config", False) else \
-        {"analysis": manifest.get("analysis_settings", {})}
+    # Analiz ayarları varsayılan olarak GÜNCEL config'ten alınır (düzeltilen yöntemler eski kayıtlara da uygulansın).
+    # Çalıştırma anındaki ayarlarla birebir tekrar için: --use-run-config. Kullanılan ayarlar analysis.json'a yazılır.
+    if getattr(args, "use_run_config", False):
+        cfg = {"analysis": manifest.get("analysis_settings", {})}
+    else:
+        cfg = {"analysis": load_config(args.config).get("analysis", {})}
     rows = analyze_run(manifest, read_timeseries(run_dir), cfg, _window_from_manifest(manifest))
     write_json(run_dir / "analysis.json", {"run_id": manifest["run_id"], "created_at": _now(),
                                            "window": manifest["window"], "analysis_settings": cfg["analysis"],
@@ -188,8 +191,8 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--end", help="dönem bitiş tarihi YYYY-MM-DD (varsayılan: bugün - end_offset_days)")
         if run:
             sp.add_argument("--run", default="latest", help="çalıştırma klasörü ya da 'latest'")
-            sp.add_argument("--use-current-config", action="store_true",
-                            help="analiz eşiklerini kayıttaki yerine güncel config'ten al")
+            sp.add_argument("--use-run-config", action="store_true",
+                            help="analiz ayarlarını güncel config yerine çalıştırma anında kaydedilenlerden al")
 
     sub.add_parser("check-llm", help="model bağlantısını test et")
     common(sub.add_parser("fetch", help="veriyi kaynaklardan çek ve kaydet"), fetch=True)
@@ -201,7 +204,17 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _utf8_console() -> None:
+    """Windows konsolunda (cp1254) '→', '✅' gibi karakterler hata vermesin."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_console()
     load_env()
     args = build_parser().parse_args(argv)
     try:

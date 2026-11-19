@@ -93,6 +93,9 @@ arası 15 sn, 429'da 60/120 sn bekleyip tekrar deneme eklendi.
 - **Karar:** Başarılı yanıtlar 24 saat saklanır. Süre, verinin değişme sıklığına göre seçildi: veri günlük, dönem
   bitişi bugünden 2 gün önce ve anahtar tarihleri içerdiği için ertesi gün kendiliğinden yeniden çekilir; daha kısa
   bir süre (ör. 2 saat) aynı gün içindeki tekrar çalıştırmaları korumazdı. `--refresh` ile zorla yenilenir.
+- **Gözden geçirmede eklenenler:** süresi dolan kayıtlar diskten silinir (birikme yok); kısmi sonuçlar saklanmaz
+  (24 saat eksik veriyle çalışılmasın); anahtara kod sürümü girer (veri işleme değişince eski kayıt kullanılmaz);
+  eski çalıştırmalar için onaylı `trendpipe clean`.
 - **Reddedilen seçenek — Google Trends'e toplu istek (5 terim/istek):** İstek sayısını azaltır ama Google tüm
   terimleri en popüler olana göre ölçekleyip tam sayıya yuvarladığı için küçük terimler 0–3 aralığına sıkışır ve
   çoğu "yeterli veri yok" (0) olur. Önbellek aynı kazancı veri kaybı olmadan sağladığı için eklenmedi.

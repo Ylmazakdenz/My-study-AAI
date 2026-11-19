@@ -109,3 +109,54 @@ def test_disabled_cache_never_stores(tmp_path):
     c = FetchCache(tmp_path, ttl_hours=24, enabled=False)
     c.put("k", _res(), "r")
     assert c.get("k") is None and not list(tmp_path.iterdir())
+
+
+def test_expired_entries_are_deleted_from_disk(tmp_path):
+    c = FetchCache(tmp_path, ttl_hours=24)
+    c.put("eski", _res(), "r1")
+    c.put("yeni", _res(), "r2")
+    (tmp_path / "yarim.tmp").write_text("x")
+    (tmp_path / "bozuk.json").write_text("{")
+    old = json.loads((tmp_path / "eski.json").read_text())
+    old["cached_at"] = (datetime.now(timezone.utc) - timedelta(hours=30)).isoformat()
+    (tmp_path / "eski.json").write_text(json.dumps(old))
+    assert c.prune() == 3
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["yeni.json"]
+
+
+def test_partial_results_are_not_cached(tmp_path):
+    c = FetchCache(tmp_path, ttl_hours=24)
+    r = _res()
+    r.error = "proje toplamı alınamadı (HTTP 503)"            # başarılı ama oranlama yapılamadı
+    c.put("k", r, "r1")
+    assert c.get("k") is None
+
+
+def test_code_version_invalidates_keys(monkeypatch):
+    import trendpipe.cache as cm
+    d = date(2026, 1, 1)
+    k1 = cache_key("wikimedia", {}, "q", d, d)
+    monkeypatch.setattr(cm, "__version__", "9.9.9")
+    assert cache_key("wikimedia", {}, "q", d, d) != k1
+
+
+def test_clean_command_dry_run_then_yes(cfg, tmp_path, monkeypatch):
+    runs = tmp_path / "runs"
+    for name in ("20260101-000000", "20260102-000000", "20260103-000000"):
+        (runs / name).mkdir(parents=True)
+        (runs / name / "manifest.json").write_text("{}")
+    cfg["cache"] = {"enabled": True, "ttl_hours": 24, "dir": str(tmp_path / "cache")}
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    FetchCache(tmp_path / "cache").put("k", _res(), "r")
+    args = ["clean", "--config", str(p), "--out-dir", str(runs), "--keep", "1", "--cache"]
+    assert cli.main(args) == 0 and len(list(runs.iterdir())) == 3                # önce yalnız plan
+    assert cli.main(args + ["--yes"]) == 0
+    assert [x.name for x in runs.iterdir()] == ["20260103-000000"]
+    assert not list((tmp_path / "cache").glob("*.json"))
+
+
+def test_clean_refuses_sample_dir(cfg, tmp_path):
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    assert cli.main(["clean", "--config", str(p), "--out-dir", str(tmp_path / "data" / "sample"), "--yes"]) == 1

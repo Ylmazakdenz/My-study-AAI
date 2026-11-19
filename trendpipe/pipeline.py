@@ -43,6 +43,8 @@ def fetch_run(cfg: dict, terms: list[Term], window: Window, sources: list[Source
     run_dir = new_run_dir(out_dir)
     handler = attach_run_log(run_dir)
     try:
+        if cache:
+            cache.prune()
         log.info("çalıştırma %s başladı; dönem %s", run_dir.name, window.as_dict())
         terms_by_id = {t.id: t for t in terms}
         results: list[FetchResult] = []

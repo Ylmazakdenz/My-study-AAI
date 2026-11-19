@@ -42,10 +42,12 @@ trendpipe analyze   --run latest       # yalnızca hesapla (ağ gerekmez)
 trendpipe interpret --run latest       # yalnızca yorumlat
 trendpipe -v fetch                     # ayrıntılı log
 trendpipe all --refresh                # önbelleği yok say, her şeyi kaynaktan yeniden çek
+trendpipe clean --keep 10              # eski çalıştırmaları temizle (önce planı gösterir; silmek için --yes)
 ```
 
 Aynı veri (kaynak + ayarlar + sorgu + dönem) **24 saat** içinde kaynaktan tekrar çekilmez; önbellekten gelir ve
-terminalde `[ÖNB]` ile, kayıtta ilk çekilme zamanıyla işaretlenir. Yalnızca başarılı yanıtlar saklanır.
+terminalde `[ÖNB]` ile, kayıtta ilk çekilme zamanıyla işaretlenir. Yalnızca eksiksiz başarılı yanıtlar saklanır;
+süresi dolan kayıtlar her çalıştırmanın başında diskten silinir.
 
 Bağlantı olmadan, repodaki gerçek örnek veriyle:
 

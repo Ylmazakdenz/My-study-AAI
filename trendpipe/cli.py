@@ -150,6 +150,34 @@ def cmd_interpret(args, run_dir: Path | None = None) -> int:
     return 0
 
 
+def cmd_clean(args) -> int:
+    """Eski çalıştırmaları ve önbelleği temizler. Varsayılan olarak yalnızca planı gösterir; silmek için --yes."""
+    import shutil
+    out = Path(args.out_dir)
+    if "sample" in out.resolve().parts:
+        print("[HATA] data/sample altındaki örnek çalıştırmalar repoya aittir; bu komutla silinmez.", file=sys.stderr)
+        return 1
+    runs = sorted([p for p in out.glob("*") if (p / "manifest.json").exists()]) if out.exists() else []
+    old = runs[:-args.keep] if args.keep > 0 else runs
+    cfg = load_config(args.config)
+    cc = cfg.get("cache") or {}
+    cache = FetchCache(cc.get("dir", "data/cache"), cc.get("ttl_hours", 24))
+    n_cache = len(list(cache.dir.glob("*.json"))) if cache.dir.exists() else 0
+    print(f"Çalıştırmalar ({out}): {len(runs)} adet; en yeni {args.keep} tanesi kalır, {len(old)} tanesi silinecek.")
+    for p in old:
+        print(f"  - {p.name}")
+    if args.cache:
+        print(f"Önbellek ({cache.dir}): {n_cache} kayıt silinecek.")
+    if not args.yes:
+        print("\nHiçbir şey silinmedi. Silmek için aynı komutu --yes ile çalıştırın.")
+        return 0
+    for p in old:
+        shutil.rmtree(p)
+    removed = cache.clear() if args.cache else cache.prune()
+    print(f"\n{len(old)} çalıştırma silindi; önbellekten {removed} kayıt silindi.")
+    return 0
+
+
 def cmd_all(args) -> int:
     run_dir = cmd_fetch(args)
     print()
@@ -184,6 +212,11 @@ def build_parser() -> argparse.ArgumentParser:
     common(sub.add_parser("fetch", help="veriyi kaynaklardan çek ve kaydet"), fetch=True)
     common(sub.add_parser("analyze", help="kayıtlı veride değişimi hesapla"), run=True)
     common(sub.add_parser("interpret", help="analizi modele yorumlat"), run=True)
+    sp = sub.add_parser("clean", help="eski çalıştırmaları ve önbelleği temizle (önce planı gösterir)")
+    common(sp)
+    sp.add_argument("--keep", type=int, default=10, help="saklanacak en yeni çalıştırma sayısı (varsayılan 10)")
+    sp.add_argument("--cache", action="store_true", help="önbelleği tamamen temizle (yoksa yalnız süresi dolanlar)")
+    sp.add_argument("--yes", action="store_true", help="planı onayla ve sil")
     sp = sub.add_parser("all", help="fetch + analyze + interpret")
     common(sp, fetch=True)
     sp.add_argument("--skip-llm", action="store_true", help="model adımını atla")
@@ -217,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_interpret(args)
         if args.cmd == "all":
             return cmd_all(args)
+        if args.cmd == "clean":
+            return cmd_clean(args)
     except (ConfigError, FileNotFoundError, ValueError) as exc:
         print(f"[HATA] {exc}", file=sys.stderr)
         return 1

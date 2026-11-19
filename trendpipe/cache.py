@@ -8,7 +8,11 @@ Kurallar:
 - Anahtar: kaynak tipi + veriyi etkileyen ayarlar (proje, bölge, dil, örnek sayısı...) + sorgu + başlangıç/bitiş
   tarihi. Ertesi gün dönem kaydığı için anahtar kendiliğinden değişir; ayar değişirse eski kayıt kullanılmaz.
 - Yalnızca BAŞARILI yanıtlar saklanır; hata, 429, boş yanıt saklanmaz (sonraki çalıştırma yeniden dener).
-- Süre (ttl_hours, varsayılan 24) dolan kayıt kullanılmaz. `--refresh` önbelleği yok sayar.
+- Kısmen bozuk başarılı yanıtlar da saklanmaz (ör. Vikipedi proje toplamı alınamadı, Google örneklerinden bazıları
+  gelmedi): 24 saat boyunca eksik veriyle çalışılmasın.
+- Anahtara kod sürümü de girer: veri işleme değiştiğinde (sürüm artınca) eski kayıtlar kullanılmaz.
+- Süre (ttl_hours, varsayılan 24) dolan kayıt kullanılmaz ve her çalıştırmanın başında diskten silinir; önbellek
+  birikmez. `--refresh` önbelleği yok sayar; `trendpipe clean --cache` tamamen temizler.
 - Önbellekten gelen sonuç kayıtta işaretlenir (ilk çekilme zamanı ve çalıştırma kimliğiyle) ve ham yanıt yeni
   çalıştırmanın klasörüne de yazılır; her çalıştırma klasörü kendi başına eksiksizdir.
 """
@@ -20,6 +24,7 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from . import __version__
 from .logs import get_logger
 from .models import FetchResult, FetchStatus, Point
 
@@ -36,8 +41,9 @@ DATA_KEYS = {
 
 def cache_key(source_type: str, settings: dict, query: str, start: date, end: date) -> str:
     relevant = {k: settings.get(k) for k in DATA_KEYS.get(source_type, ())}
-    blob = json.dumps({"v": CACHE_FORMAT, "type": source_type, "settings": relevant, "query": query,
-                       "start": start.isoformat(), "end": end.isoformat()}, sort_keys=True, ensure_ascii=False)
+    blob = json.dumps({"v": CACHE_FORMAT, "code": __version__, "type": source_type, "settings": relevant,
+                       "query": query, "start": start.isoformat(), "end": end.isoformat()},
+                      sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 
 
@@ -46,6 +52,38 @@ class FetchCache:
         self.dir = Path(directory)
         self.ttl_hours = float(ttl_hours)
         self.enabled = enabled and self.ttl_hours > 0
+
+    def prune(self, now: datetime | None = None) -> int:
+        """Süresi dolmuş, bozuk ya da yarım kalmış kayıtları siler. Silinen dosya sayısını döndürür."""
+        if not self.dir.exists():
+            return 0
+        now = now or datetime.now(timezone.utc)
+        removed = 0
+        for p in self.dir.iterdir():
+            if p.suffix == ".tmp":
+                expired = True
+            elif p.suffix == ".json":
+                try:
+                    cached_at = datetime.fromisoformat(json.loads(p.read_text(encoding="utf-8"))["cached_at"])
+                    expired = (now - cached_at).total_seconds() / 3600 > self.ttl_hours
+                except (ValueError, KeyError, OSError):
+                    expired = True
+            else:
+                continue
+            if expired:
+                p.unlink(missing_ok=True)
+                removed += 1
+        if removed:
+            log.info("önbellek: süresi dolmuş/bozuk %d kayıt silindi", removed)
+        return removed
+
+    def clear(self) -> int:
+        n = 0
+        if self.dir.exists():
+            for p in self.dir.glob("*.json"):
+                p.unlink(missing_ok=True)
+                n += 1
+        return n
 
     def _path(self, key: str) -> Path:
         return self.dir / f"{key}.json"
@@ -79,7 +117,10 @@ class FetchCache:
         return res
 
     def put(self, key: str, res: FetchResult, run_id: str) -> None:
-        if not self.enabled or res.status != FetchStatus.OK or getattr(res, "from_cache", False):
+        if not self.enabled or res.status != FetchStatus.OK or res.from_cache:
+            return
+        if res.error:  # başarılı ama kısmen bozuk (not içeriyor): saklanmaz, sonraki çalıştırma yeniden dener
+            log.info("önbelleğe alınmadı (kısmi sonuç): %s/%s — %s", res.source, res.query, res.error)
             return
         self.dir.mkdir(parents=True, exist_ok=True)
         d = {"cached_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(), "run_id": run_id,

@@ -36,7 +36,10 @@ Bir kaynak art arda N istekte 429 alırsa kalan istekler denenmez ve "Denenmedi"
 Aynı veri 24 saat içinde kaynaktan tekrar çekilmez (`cache.ttl_hours`). Anahtar: kaynak tipi + veriyi etkileyen
 ayarlar (proje, bölge, dil, örnek sayısı) + sorgu + başlangıç/bitiş tarihi. Veri günlük ve dönem bitişi bugünden
 2 gün önce olduğu için aynı gün içinde değişmez; ertesi gün dönem kayar ve anahtar kendiliğinden değişir.
-Yalnızca başarılı yanıtlar saklanır; hata/429/boş yanıt sonraki çalıştırmada yeniden denenir. Önbellekten gelen
+Yalnızca eksiksiz başarılı yanıtlar saklanır; hata/429/boş yanıt ve kısmi sonuçlar (ör. Vikipedi proje toplamı
+alınamadı) sonraki çalıştırmada yeniden denenir. Anahtara kod sürümü de girer; veri işleme değiştiğinde eski kayıtlar
+kullanılmaz. Süresi dolan kayıtlar her çalıştırmanın başında diskten silinir (önbellek birikmez); eski çalıştırma
+klasörleri `trendpipe clean --keep N --yes` ile temizlenir (`data/sample` korunur). Önbellekten gelen
 sonuç `manifest.json`'da `from_cache`, ilk `fetched_at` ve `cache_origin_run` ile işaretlenir; ham yanıt yeni
 çalıştırmanın klasörüne de yazılır. `--refresh` önbelleği yok sayar.
 

@@ -14,8 +14,9 @@ Kurallar:
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
-from statistics import mean, median
+from statistics import mean, median, stdev
 
 from .config import Window
 from .models import FetchStatus, Point
@@ -25,9 +26,10 @@ ANALYSIS_FIELDS = [
     "baseline_start", "baseline_end", "recent_start", "recent_end",
     "baseline_days_present", "recent_days_present", "source_gap_days", "baseline_coverage", "recent_coverage",
     "baseline_mean", "recent_mean", "abs_change", "pct_change", "recent_slope_per_day",
-    "direction", "low_volume", "signal",
+    "direction", "pop_t_stat", "low_volume", "signal",
     "ly_start", "ly_end", "yoy_result", "yoy_granularity", "yoy_ly_points", "yoy_recent_points",
-    "yoy_ly_mean", "yoy_recent_mean", "yoy_pct_change", "yoy_direction", "yoy_low_volume", "yoy_signal",
+    "yoy_ly_mean", "yoy_recent_mean", "yoy_pct_change", "yoy_direction", "yoy_t_stat", "yoy_low_volume",
+    "yoy_signal",
     "trend_label", "rank_in_source", "notes",
 ]
 
@@ -57,7 +59,7 @@ def classify(row: dict) -> str:
 class Trend:
     """Dönemsel + yıllık karşılaştırmanın birleşimi (yorum etiketi)."""
 
-    ABOVE_SEASON_UP = "sezon_ustu_artis"          # son 4 haftada arttı VE geçen yılın aynı döneminden yüksek
+    ABOVE_SEASON_UP = "sezon_ustu_artis"          # yakın dönemde arttı VE geçen yılın aynı döneminden yüksek
     SEASONAL_UP = "mevsimsel_artis"               # arttı ama geçen yılla benzer düzeyde -> mevsimin olağan artışı
     SEASONAL_UP_WEAKER = "mevsimsel_artis_gecen_yildan_zayif"
     UP_YOY_UNKNOWN = "artis_yillik_bilinmiyor"
@@ -114,6 +116,31 @@ def _slope(values: list[tuple[int, float]]) -> float | None:
     return sum((x - mx) * (y - my) for x, y in values) / den
 
 
+def welch_t(before: list[float], after: list[float]) -> float | None:
+    """İki dönemin ortalama farkının, günlük dalgalanmaya göre büyüklüğü (Welch t istatistiği).
+
+    |t| küçükse fark, günden güne olağan dalgalanma içindedir. Ardışık günler birbirine bağımlı olduğu için
+    (otokorelasyon) bu test iyimserdir; bu yüzden tek başına değil, yüzde eşiğiyle BİRLİKTE kullanılır.
+    """
+    if len(before) < 3 or len(after) < 3:
+        return None
+    se = math.sqrt(stdev(before) ** 2 / len(before) + stdev(after) ** 2 / len(after))
+    diff = mean(after) - mean(before)
+    if se == 0:
+        return 0.0 if diff == 0 else math.copysign(99.0, diff)
+    return round(diff / se, 2)
+
+
+def _direction(pct: float, t: float | None, thr: float, min_t: float) -> tuple[str, str | None]:
+    """Yön ve (varsa) açıklama notu. Belirgin sayılmak için hem yüzde eşiği hem gürültü testi geçilmeli."""
+    if abs(pct) < thr:
+        return "flat", None
+    if min_t > 0 and t is not None and abs(t) < min_t:
+        return "flat", (f"%{pct:+.1f} değişim eşiği aştı ama günlük dalgalanma içinde (t={t:.2f} < {min_t:g}); "
+                        "belirgin sayılmadı.")
+    return ("up" if pct > 0 else "down"), None
+
+
 def source_gap_days(series_list: list[list[Point]], window: Window, min_series: int = 3) -> set[date]:
     """Bir kaynağın TÜM terimlerinde aynı anda eksik olan günler = kaynağın kendi kesintisi.
 
@@ -155,7 +182,8 @@ def normalize_by_norm(series_list: list[list[Point]], min_norm_ratio: float = 0.
 
 def analyze_series(points: list[Point], window: Window, *, min_coverage: float = 0.8,
                    flat_threshold_pct: float = 15.0, low_volume: float | None = None,
-                   gap_days: set[date] | None = None, min_window_days_ratio: float = 0.5) -> dict:
+                   gap_days: set[date] | None = None, min_window_days_ratio: float = 0.5,
+                   min_t_stat: float = 0.0) -> dict:
     """gap_days: kaynağın kesinti günleri; kapsama hesabının paydasından çıkarılır (sıfır sayılmaz, yok sayılır)."""
     gap_days = gap_days or set()
     by_day = {p.day: p.value for p in points}
@@ -173,7 +201,7 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
         "baseline_coverage": round(len(base_vals) / len(base_days), 3) if base_days else 0.0,
         "recent_coverage": round(len(rec_vals) / len(rec_days), 3) if rec_days else 0.0,
         "baseline_mean": None, "recent_mean": None, "abs_change": None, "pct_change": None,
-        "recent_slope_per_day": None, "direction": None, "low_volume": None, "notes": [],
+        "recent_slope_per_day": None, "direction": None, "pop_t_stat": None, "low_volume": None, "notes": [],
     }
     if gap_days:
         out["notes"].append(f"Kaynak kesintisi: {len(gap_days)} gün tüm terimlerde eksik; bu günler sıfır sayılmadı, "
@@ -209,7 +237,10 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
         pct = (rm - bm) / bm * 100
         out["pct_change"] = round(pct, 1)
         out["result"] = Result.COMPUTED
-        out["direction"] = "up" if pct >= flat_threshold_pct else "down" if pct <= -flat_threshold_pct else "flat"
+        out["pop_t_stat"] = welch_t(base_vals, rec_vals)
+        out["direction"], note = _direction(round(pct, 1), out["pop_t_stat"], flat_threshold_pct, min_t_stat)
+        if note:
+            out["notes"].append(note)
     # Düşük hacim, normalize edilmişse ham sayılar üzerinden değerlendirilir.
     rbm = mean(raw_by_day[d] for d in base_days if d in by_day)
     rrm = mean(raw_by_day[d] for d in rec_days if d in by_day)
@@ -241,12 +272,12 @@ def _expected_points(start: date, end: date, step: int, anchor: date) -> list[da
 
 
 def analyze_yoy(points: list[Point], window: Window, *, min_coverage: float = 0.8,
-                flat_threshold_pct: float = 15.0, low_volume: float | None = None) -> dict:
+                flat_threshold_pct: float = 15.0, low_volume: float | None = None, min_t_stat: float = 0.0) -> dict:
     """Yakın dönem ↔ geçen yılın aynı dönemi. İki dönem de AYNI seriden (aynı istekten) alınır; Google Trends'te
     ölçekleme istek başına yapıldığı için bu şarttır."""
     out = {"yoy_result": None, "yoy_granularity": None, "yoy_ly_points": 0, "yoy_recent_points": 0,
            "yoy_ly_mean": None, "yoy_recent_mean": None, "yoy_pct_change": None, "yoy_direction": None,
-           "yoy_low_volume": None, "yoy_notes": []}
+           "yoy_t_stat": None, "yoy_low_volume": None, "yoy_notes": []}
     if not window.has_yoy or not points:
         out["yoy_result"] = Result.NO_DATA
         return out
@@ -275,7 +306,13 @@ def analyze_yoy(points: list[Point], window: Window, *, min_coverage: float = 0.
         return out
     pct = (rm - lm) / lm * 100
     out["yoy_pct_change"] = round(pct, 1)
-    out["yoy_direction"] = "up" if pct >= flat_threshold_pct else "down" if pct <= -flat_threshold_pct else "flat"
+    if step == 1:
+        out["yoy_t_stat"] = welch_t([by_day[d] for d in ly], [by_day[d] for d in rec])
+        out["yoy_direction"], note = _direction(round(pct, 1), out["yoy_t_stat"], flat_threshold_pct, min_t_stat)
+        if note:
+            out["yoy_notes"].append("Yıllık: " + note)
+    else:  # haftalık seride 3-4 nokta var; gürültü testi güvenilir olmaz, yalnız yüzde eşiği uygulanır
+        out["yoy_direction"], _ = _direction(round(pct, 1), None, flat_threshold_pct, 0)
     out["yoy_result"] = Result.COMPUTED
     return out
 
@@ -321,6 +358,7 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
     low = a.get("low_volume") or {}
     min_cov = float(a.get("min_coverage", 0.8))
     thr = float(a.get("flat_threshold_pct", 15))
+    min_t = float(a.get("min_t_stat", 0))
     series, gaps, normalized, zeros = _prepare_series(manifest, series, a, "main", window)
     series, _, yoy_normalized, yoy_zeros = _prepare_series(manifest, series, a, "yoy", window)
     yoy_recs = {(r["source"], r["term_id"]): r for r in manifest["fetches"] if r.get("series") == "yoy"}
@@ -338,7 +376,8 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
         else:
             stats = analyze_series(series.get((src, tid, "main"), []), window, min_coverage=min_cov,
                                    flat_threshold_pct=thr, low_volume=low.get(src), gap_days=gaps.get(src),
-                                   min_window_days_ratio=float(a.get("min_window_days_ratio", 0.5)))
+                                   min_window_days_ratio=float(a.get("min_window_days_ratio", 0.5)),
+                                   min_t_stat=min_t)
             if zeros.get((src, tid)):
                 stats["notes"].insert(0, f"{zeros[(src, tid)]} gün 0 değeri (kaynağa göre 'yeterli veri yok') "
                                          "eksik sayıldı, sıfır olarak hesaba katılmadı.")
@@ -360,7 +399,7 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
                  "yoy_notes": [f"Yıllık seri alınamadı ({yrec['status']}): {yrec.get('error') or '-'}"]}
         else:
             y = analyze_yoy(series.get((src, tid, "yoy"), []), window, min_coverage=min_cov,
-                            flat_threshold_pct=thr, low_volume=low.get(src))
+                            flat_threshold_pct=thr, low_volume=low.get(src), min_t_stat=min_t)
             if src in yoy_normalized:
                 y["yoy_notes"].insert(0, "Yıllık seri de kaynağın günlük toplamına oranlandı (kaynağın genel hacmi "
                                          "yıldan yıla değişebilir).")

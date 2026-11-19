@@ -15,6 +15,7 @@ import json
 import time
 from datetime import date
 
+from ..config import utc_offset_minutes
 from ..models import FetchStatus, Point
 from .base import Source, log
 
@@ -61,7 +62,9 @@ class GoogleTrendsSource(Source):
                 self._throttle()
                 self._attempts += 1
                 try:
-                    client = TrendReq(hl=self.settings.get("hl", "tr-TR"), tz=-180, timeout=(10, 30))
+                    # pytrends tz: UTC'nin kaç dakika gerisinde (İstanbul UTC+3 → -180)
+                    client = TrendReq(hl=self.settings.get("hl", "tr-TR"), tz=-utc_offset_minutes(self.timezone),
+                                      timeout=(10, 30))
                     client.build_payload([query], timeframe=timeframe, geo=geo)
                     df = client.interest_over_time()
                     last_error = None

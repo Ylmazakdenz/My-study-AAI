@@ -39,7 +39,9 @@ def build_sources(cfg: dict, only: list[str] | None = None, user_agent: str = "S
         typ = settings.get("type", n)
         if typ not in TYPES:
             raise ValueError(f"'{n}' kaynağının tipi bilinmiyor: {typ}. Tipler: {', '.join(TYPES)}")
-        out.append(TYPES[typ](settings, session=session, user_agent=user_agent, name=n))
+        src = TYPES[typ](settings, session=session, user_agent=user_agent, name=n)
+        src.timezone = (cfg.get("window") or {}).get("timezone", "Europe/Istanbul")
+        out.append(src)
     return out
 
 

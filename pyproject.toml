@@ -17,6 +17,8 @@ dependencies = [
     # Google Trends (ana kaynak) — resmi olmayan kütüphane
     "pytrends>=4.9.2,<5",
     "pandas>=2.0,<4",
+    # zoneinfo için saat dilimi veritabanı (Windows'ta işletim sistemi sağlamaz)
+    "tzdata; platform_system == 'Windows'",
 ]
 
 [project.optional-dependencies]

@@ -117,6 +117,20 @@ Tüm modüller baştan sona okunarak denetlendi; bulunan sorunlar düzeltildi ve
 | F8 | `interpret` eski `analysis.json`'ı kullanabiliyordu | Eski sürümün analiziyle yorum | Yorumdan önce yeniden analiz |
 | F9 | `.env`'de sayı yerine metin | Anlaşılmaz hata | Açık hata mesajı |
 
+## K15 — Profesyonellik denetimi (19.11)
+
+"Bir uzman bu koda baksa neyi amatörce bulur?" sorusuyla ikinci denetim:
+
+| Konu | Önce | Sonra |
+|---|---|---|
+| Belirgin değişim ölçütü | Yalnızca ±%15 eşiği; günlük dalgalanması büyük bir seride rastlantısal %20 "artış" sayılabilirdi | Eşik **ve** Welch t ≥ 2. Mevcut örneklerde güvenilir sayılan 6 sonucun hepsinde t > 3; hiçbir etiket değişmedi |
+| Dönem uzunluğu metinleri | Modele "son 4 haftada" sabit yazılıyordu | Dönem uzunluğu ayardan gelir |
+| "Bugün" | Bilgisayarın saat dilimi (Colab UTC ↔ Mac İstanbul farklı dönem üretebilirdi); Google'a sabit -180 | Pazar saat dilimi (`window.timezone`), Google tz bundan türetilir |
+| Tekrarlanabilirlik | Manifestte yalnız araç sürümü | git commit, değişiklik durumu, Python, platform, paket sürümleri |
+| Kurulum doğrulama | Hata alınca anlaşılıyordu | `trendpipe doctor` |
+| Testler | Tek dosyada 30+ karışık test | Konulara göre dosyalar (analiz, kaynaklar, denetim, CLI, önbellek, gürültü…) |
+| Çıktı sözleşmesi | Belgelenmemişti | [ciktilar.md](ciktilar.md): sonraki ajanların girdi biçimi |
+
 ## K9 — Ayar dosyası şemayla doğrulanır (19.11)
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden

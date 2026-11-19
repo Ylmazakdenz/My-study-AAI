@@ -116,7 +116,7 @@ def compute_window(cfg: dict, today: date | None = None, end: date | None = None
     if recent < 3 or base < 3:
         raise ConfigError("recent_days ve baseline_days en az 3 olmalı.")
     if end is None:
-        today = today or date.today()
+        today = today or market_today(w.get("timezone", DEFAULT_TZ))
         end = today - timedelta(days=int(w.get("end_offset_days", 2)))
     recent_start = end - timedelta(days=recent - 1)
     baseline_end = recent_start - timedelta(days=1)
@@ -134,6 +134,24 @@ def _env_float(name: str, default: str) -> float:
         return float(raw)
     except ValueError:
         raise ConfigError(f".env içinde {name} sayı olmalı (şu an: '{raw}')") from None
+
+
+DEFAULT_TZ = "Europe/Istanbul"
+
+
+def market_today(tz: str = DEFAULT_TZ) -> date:
+    """Pazarın saat dilimine göre bugün. Bilgisayarın saat diliminden bağımsızdır (ör. Colab UTC çalışır);
+    böylece aynı anda farklı makinelerde başlatılan çalıştırmalar aynı dönemi kullanır."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo(tz)).date()
+
+
+def utc_offset_minutes(tz: str = DEFAULT_TZ) -> int:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    off = datetime.now(ZoneInfo(tz)).utcoffset()
+    return int(off.total_seconds() // 60) if off else 0
 
 
 def llm_settings() -> dict:

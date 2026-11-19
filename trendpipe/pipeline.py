@@ -16,6 +16,7 @@ from .cache import FetchCache, cache_key
 from .config import Window
 from .logs import attach_run_log, detach_run_log, get_logger
 from .models import FetchResult, FetchStatus, Term
+from .provenance import run_environment
 from .sources import Source
 from .storage import new_run_dir, read_json, read_timeseries, save_raw, write_json, write_timeseries
 
@@ -95,6 +96,7 @@ def fetch_run(cfg: dict, terms: list[Term], window: Window, sources: list[Source
         write_timeseries(run_dir, results, terms_by_id)
         manifest = {
             "run_id": run_dir.name, "created_at": utc_now(), "tool_version": __version__,
+            "environment": run_environment(),
             "config_file": str(config_file), "brand": cfg.get("brand", {}), "window": window.as_dict(),
             "cache": ({"enabled": cache.enabled, "ttl_hours": cache.ttl_hours, "refresh": refresh}
                       if cache else {"enabled": False}),

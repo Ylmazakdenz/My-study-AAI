@@ -1,3 +1,3 @@
 """Giyim trend veri hattı: veri çek -> değişimi hesapla -> LLM ile yorumlat -> kaydet."""
 
-__version__ = "0.2.2"
+__version__ = "0.3.0"

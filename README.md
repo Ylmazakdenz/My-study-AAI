@@ -25,7 +25,7 @@ pip install -r requirements-dev.txt    # projeyi, `trendpipe` komutunu ve test a
 cp .env.example .env                   # Windows: copy .env.example .env
 
 ollama pull llama3.1:8b                # model (~5 GB); .env'deki OLLAMA_MODEL ile aynı olmalı
-trendpipe check-llm                    # model bağlantı testi
+trendpipe doctor                       # kurulum kontrolü: Python, paketler, ayarlar, Ollama ve model, klasörler
 python -m pytest -q                    # testler (ağ ve model gerekmez)
 ```
 
@@ -87,6 +87,7 @@ katkı · 4. söyleyemediklerimiz · ek: tüm sonuçlar tablosu (Python).
 | [docs/kaynaklar.md](docs/kaynaklar.md) | 6 aday kaynağın resmi belgelerle karşılaştırması ve gerçek denemelere göre seçim |
 | [docs/yontem.md](docs/yontem.md) | Eksik veri kuralları, dönemsel/yıllık karşılaştırma, etiketler, model denetimi |
 | [docs/kararlar.md](docs/kararlar.md) | Alınan kararlar ve onları doğuran gerçek çalıştırma bulguları |
+| [docs/ciktilar.md](docs/ciktilar.md) | Çıktı dosyalarının alan alan açıklaması (sonraki ajanların girdisi) |
 | [data/sample/README.md](data/sample/README.md) | Repodaki gerçek örnek çalıştırmalar |
 | [notebooks/colab_run.ipynb](notebooks/colab_run.ipynb) | Hocanın Colab + Ollama kurulumuyla alternatif çalıştırma |
 
@@ -101,12 +102,28 @@ trendpipe/
 ├── prompts.py       # aday listesi, kanıt satırları, JSON şeması
 ├── llm.py           # Ollama bağlantısı, öz-düzeltme döngüsü, rapor
 ├── checks.py        # model yanıtı denetimi — ileride Değerlendirme Ajanı'nın aracı
-├── schema.py        # ayar dosyası doğrulaması
+├── schema.py        # ayar dosyası doğrulaması (adlar ve türler)
+├── doctor.py        # kurulum kontrolü
+├── provenance.py    # çalıştırma ortamı kaydı (git commit, Python, paketler)
 ├── cache.py         # istek önbelleği (24 saat, yalnız başarılı yanıtlar)
 ├── config.py · storage.py · logs.py · models.py
 config/config.yaml   # marka, dönem, kaynaklar, terimler (gizli bilgi yok)
 .env.example         # model adresi/adı (gizli bilgiler .env'de, repoya girmez)
 ```
+
+## Geliştirme
+
+```bash
+python -m pytest -q          # 100+ test; ağ ve model gerekmez (sahte oturum / sahte Ollama)
+ruff check trendpipe tests   # kod denetimi
+```
+
+- Her `push`'ta GitHub Actions testleri ve lint'i Python 3.10 / 3.12 / 3.13'te çalıştırır.
+- Veri işleme (kaynak ayrıştırma, oranlama, analiz) değişirse `trendpipe/__init__.py`'deki sürümü artırın: önbellek
+  anahtarı sürümü içerir, böylece eski biçimde işlenmiş veri kullanılmaz.
+- Gerçek çalıştırmada bulunan her hata için önce o durumu yeniden üreten bir test yazılır
+  (`tests/test_checks.py`, `tests/test_robustness.py` örnekleri).
+- Kararlar gerekçe ve kanıtıyla `docs/kararlar.md`'ye eklenir.
 
 ## Sonraki aşamaya köprü
 

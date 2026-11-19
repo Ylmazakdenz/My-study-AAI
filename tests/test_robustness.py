@@ -151,3 +151,70 @@ def test_interpret_reanalyzes_stale_analysis(tmp_path, monkeypatch):
     assert cli.main(["interpret", "--config", str(root / "config/config.yaml"), "--run", str(run)]) == 0
     fresh = json.loads((run / "analysis.json").read_text(encoding="utf-8"))
     assert all("trend_label" in r for r in fresh["rows"])
+
+
+def test_manifest_records_environment_and_market_timezone(cfg, tmp_path, monkeypatch):
+    """P3/P4: manifest ortam bilgisini (sürüm, Python, paketler, git) yazar; 'bugün' pazar saat dilimine göredir."""
+    from datetime import datetime, timezone
+
+    from trendpipe import config as cfgmod
+    from trendpipe.provenance import run_environment
+    env = run_environment()
+    assert env["python"] and env["trendpipe"] and "pytrends" in env["packages"]
+    # 23:30 UTC = İstanbul'da ertesi gün 02:30 → pazar günü İstanbul'a göre hesaplanır
+    fixed = datetime(2026, 11, 19, 23, 30, tzinfo=timezone.utc)
+
+    class FakeDT(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+    import datetime as dtmod
+    monkeypatch.setattr(dtmod, "datetime", FakeDT)
+    assert cfgmod.market_today("Europe/Istanbul") == date(2026, 11, 20)
+    assert cfgmod.market_today("UTC") == date(2026, 11, 19)
+    assert cfgmod.utc_offset_minutes("Europe/Istanbul") == 180
+
+
+def test_unknown_timezone_rejected(tmp_path):
+    from pathlib import Path
+
+    from trendpipe.config import load_config
+    root = Path(__file__).resolve().parents[1]
+    c = yaml.safe_load((root / "config/config.yaml").read_text(encoding="utf-8"))
+    c["window"]["timezone"] = "Europe/Istambul"
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(c, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(ConfigError, match="bilinmeyen saat dilimi"):
+        load_config(p)
+
+
+def test_doctor_reports_missing_model(monkeypatch, tmp_path, capsys):
+    """P5: doctor, Ollama'da model yoksa hata verir ve nasıl indirileceğini söyler."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+
+    class Client:
+        def __init__(self, host=None, timeout=None):
+            pass
+
+        def list(self):
+            return {"models": [{"model": "llama3.2:latest"}]}
+    mod = types.ModuleType("ollama")
+    mod.Client = Client
+    monkeypatch.setitem(sys.modules, "ollama", mod)
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:8b")
+    monkeypatch.chdir(tmp_path)
+    rc = cli.main(["doctor", "--config", str(root / "config/config.yaml"), "--out-dir", str(tmp_path / "runs")])
+    out = capsys.readouterr().out
+    assert rc == 1 and "ollama pull llama3.1:8b" in out and "ayar dosyası" in out and ".env" in out
+
+
+def test_doctor_ok_without_llm(tmp_path, capsys, monkeypatch):
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.chdir(tmp_path)
+    rc = cli.main(["doctor", "--config", str(root / "config/config.yaml"), "--out-dir", str(tmp_path / "r"),
+                   "--no-llm"])
+    out = capsys.readouterr().out
+    assert "paket pytrends" in out and "ayar dosyası" in out and "Ollama" not in out
+    assert rc in (0, 1)

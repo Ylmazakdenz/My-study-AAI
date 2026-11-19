@@ -19,6 +19,8 @@ window:
   # Giyimde ilgi mevsimle değişir; bu karşılaştırma "mevsimsel artış" ile "sezon üstü artış"ı ayırır.
   yoy: true
   yoy_shift_days: 364
+  # "Bugün" pazarın saat dilimine göre hesaplanır; bilgisayarın saat dilimi (ör. Colab'da UTC) dönemi değiştirmez.
+  timezone: "Europe/Istanbul"
 
 analysis:
   # Bir pencerede verinin en az bu oranı mevcut değilse değişim HESAPLANMAZ (eksik veri sıfır sayılmaz).
@@ -39,6 +41,9 @@ analysis:
   zero_is_missing: [google_trends]
   # Bu eşikten küçük yüzde değişimler "yatay" kabul edilir.
   flat_threshold_pct: 15
+  # Gürültü testi: yüzde eşiğini aşan bir değişim, günden güne olağan dalgalanmadan da ayırt edilebilmeli
+  # (Welch t; |t| bu değerin altındaysa "belirgin değişim yok"). 0 = kapalı.
+  min_t_stat: 2.0
   # Karşılaştırma dönemi ortalaması bu değerin altındaysa "düşük hacim" uyarısı verilir (kaynak birimiyle).
   low_volume:
     google_trends: 5     # 0-100 göreli ilgi (ortalama bunun altındaysa Google "yetersiz veri" sınırında)

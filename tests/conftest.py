@@ -13,6 +13,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+END = date(2026, 11, 15)
+
+
+def window(cfg):
+    from trendpipe.config import compute_window
+    return compute_window(cfg, end=END)
+
+
 class FakeResponse:
     def __init__(self, status_code=200, body="", url="https://example.test"):
         self.status_code = status_code

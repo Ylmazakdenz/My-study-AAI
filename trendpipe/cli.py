@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import __version__
 from .cache import FetchCache
-from .config import ConfigError, Window, compute_window, llm_settings, load_config, load_env, parse_terms, user_agent
+from .config import ConfigError, compute_window, llm_settings, load_config, load_env, parse_terms, user_agent
 from .llm import LLMError, interpret, ping, render_markdown
 from .logs import attach_run_log, detach_run_log, setup_console
 from .models import FetchResult, FetchStatus, Term
@@ -141,7 +141,9 @@ def cmd_interpret(args, run_dir: Path | None = None, analyzed: bool = False) -> 
             "run_id": manifest["run_id"], "window": manifest["window"]}
     names = {k: v["display"] for k, v in sources.items()}
     # host adresi kaydedilmez (özel ağ/tünel adresi olabilir).
-    write_json(run_dir / "interpretation.json", {**meta, "elapsed_sec": out["elapsed_sec"],
+    from .provenance import run_environment
+    write_json(run_dir / "interpretation.json", {**meta, "environment": run_environment(),
+                                                 "elapsed_sec": out["elapsed_sec"],
                                                  "review": out["review"], "chosen_attempt": out["chosen_attempt"],
                                                  "response": out["data"], "attempts": out["attempts"],
                                                  "prompt": out["messages"][:2]})
@@ -150,6 +152,12 @@ def cmd_interpret(args, run_dir: Path | None = None, analyzed: bool = False) -> 
     print("\n" + md)
     print(f"Kayıt: {run_dir}/interpretation.md")
     return 0
+
+
+def cmd_doctor(args) -> int:
+    from .doctor import report, run
+    print("Kurulum kontrolü\n")
+    return report(run(args.config, args.out_dir, network=args.network, llm=not args.no_llm))
 
 
 def cmd_clean(args) -> int:
@@ -214,6 +222,10 @@ def build_parser() -> argparse.ArgumentParser:
     common(sub.add_parser("fetch", help="veriyi kaynaklardan çek ve kaydet"), fetch=True)
     common(sub.add_parser("analyze", help="kayıtlı veride değişimi hesapla"), run=True)
     common(sub.add_parser("interpret", help="analizi modele yorumlat"), run=True)
+    sp = sub.add_parser("doctor", help="kurulumu kontrol et (Python, paketler, ayarlar, Ollama, klasörler)")
+    common(sp)
+    sp.add_argument("--network", action="store_true", help="kaynak sunucularına erişimi de dene (veri çekmez)")
+    sp.add_argument("--no-llm", action="store_true", help="Ollama kontrolünü atla")
     sp = sub.add_parser("clean", help="eski çalıştırmaları ve önbelleği temizle (önce planı gösterir)")
     common(sp)
     sp.add_argument("--keep", type=int, default=10, help="saklanacak en yeni çalıştırma sayısı (varsayılan 10)")
@@ -254,6 +266,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_all(args)
         if args.cmd == "clean":
             return cmd_clean(args)
+        if args.cmd == "doctor":
+            return cmd_doctor(args)
     except (ConfigError, FileNotFoundError, ValueError) as exc:
         print(f"[HATA] {exc}", file=sys.stderr)
         return 1
@@ -262,4 +276,4 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-__all__ = ["main", "Window"]
+__all__ = ["main"]

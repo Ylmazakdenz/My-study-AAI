@@ -11,7 +11,6 @@ Tasarım (gerçek denemelerden çıkan ders):
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 
 from .analysis import Signal, Trend
@@ -127,6 +126,11 @@ def _pct(v: float | None) -> str:
     return "-" if v is None else f"%{v:+.1f}".replace(".", ",")
 
 
+def _ndays(a: str, b: str) -> int:
+    from datetime import date
+    return (date.fromisoformat(b) - date.fromisoformat(a)).days + 1
+
+
 def _d(s: str) -> str:
     y, m, d = s.split("-")
     return f"{d}.{m}.{y}"
@@ -156,19 +160,19 @@ def evidence_line(r: dict, names: dict) -> str:
 
 
 MEANING = {
-    Trend.ABOVE_SEASON_UP: "son 4 haftada önceki 4 haftaya göre arttı VE geçen yılın aynı döneminden yüksek",
-    Trend.SEASONAL_UP: "son 4 haftada arttı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel "
+    Trend.ABOVE_SEASON_UP: "yakın dönemde önceki döneme göre arttı VE geçen yılın aynı döneminden yüksek",
+    Trend.SEASONAL_UP: "yakın dönemde arttı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel "
                        "artış)",
-    Trend.SEASONAL_UP_WEAKER: "son 4 haftada arttı ama geçen yılın aynı döneminden DÜŞÜK (mevsimsel artış, geçen "
+    Trend.SEASONAL_UP_WEAKER: "yakın dönemde arttı ama geçen yılın aynı döneminden DÜŞÜK (mevsimsel artış, geçen "
                               "yıldan zayıf)",
-    Trend.UP_YOY_UNKNOWN: "son 4 haftada arttı; geçen yılla karşılaştırılamadı (mevsimsel olup olmadığı bilinmiyor)",
-    Trend.ABOVE_SEASON_DOWN: "son 4 haftada azaldı VE geçen yılın aynı döneminden düşük",
-    Trend.SEASONAL_DOWN: "son 4 haftada azaldı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel "
+    Trend.UP_YOY_UNKNOWN: "yakın dönemde arttı; geçen yılla karşılaştırılamadı (mevsimsel olup olmadığı bilinmiyor)",
+    Trend.ABOVE_SEASON_DOWN: "yakın dönemde azaldı VE geçen yılın aynı döneminden düşük",
+    Trend.SEASONAL_DOWN: "yakın dönemde azaldı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel "
                          "düşüş)",
-    Trend.SEASONAL_DOWN_STRONGER: "son 4 haftada azaldı ama geçen yılın aynı döneminden yüksek",
-    Trend.DOWN_YOY_UNKNOWN: "son 4 haftada azaldı; geçen yılla karşılaştırılamadı",
-    Trend.YEARLY_UP: "son 4 haftada belirgin değişim yok; geçen yılın aynı döneminden yüksek",
-    Trend.YEARLY_DOWN: "son 4 haftada belirgin değişim yok; geçen yılın aynı döneminden düşük",
+    Trend.SEASONAL_DOWN_STRONGER: "yakın dönemde azaldı ama geçen yılın aynı döneminden yüksek",
+    Trend.DOWN_YOY_UNKNOWN: "yakın dönemde azaldı; geçen yılla karşılaştırılamadı",
+    Trend.YEARLY_UP: "yakın dönemde belirgin değişim yok; geçen yılın aynı döneminden yüksek",
+    Trend.YEARLY_DOWN: "yakın dönemde belirgin değişim yok; geçen yılın aynı döneminden düşük",
 }
 UP_LABELS = {Trend.ABOVE_SEASON_UP, Trend.SEASONAL_UP, Trend.SEASONAL_UP_WEAKER, Trend.UP_YOY_UNKNOWN,
              Trend.YEARLY_UP}
@@ -240,7 +244,8 @@ def build_user_prompt(rows: list[dict], context: dict) -> str:
         f"Sezon: {context['brand'].get('season')}",
         f"Önceki dönem: {_d(w['baseline_start'])}–{_d(w['baseline_end'])} | "
         f"Yakın dönem: {_d(w['recent_start'])}–{_d(w['recent_end'])}{ly}",
-        "Yöntem: dönemsel = yakın dönem ↔ önceki dönem; yıllık = yakın dönem ↔ geçen yılın aynı dönemi. "
+        f"Yöntem: dönemsel = yakın dönem ({_ndays(w['recent_start'], w['recent_end'])} gün) ↔ önceki dönem "
+        f"({_ndays(w['baseline_start'], w['baseline_end'])} gün); yıllık = yakın dönem ↔ geçen yılın aynı dönemi. "
         f"±%{thr:g} içindeki değişimler 'belirgin değişim yok' sayıldı; düşük hacimli seriler güvenilir sayılmadı.",
         "",
         "KAYNAKLAR:",
@@ -258,6 +263,3 @@ def build_user_prompt(rows: list[dict], context: dict) -> str:
     ]
     return "\n".join(parts)
 
-
-def schema_json() -> str:
-    return json.dumps(RESPONSE_SCHEMA, ensure_ascii=False)

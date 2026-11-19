@@ -11,10 +11,13 @@ Her terim × kaynak için iki seri çekilir:
 | `main` | önceki 28 gün + yakın 28 gün (günlük) | dönemsel karşılaştırma |
 | `yoy` | geçen yılın aynı döneminden bugüne (Google Trends'te haftalık) | yıllık karşılaştırma |
 
-Bitiş tarihi, geç yayımlanan veriyi dışlamak için bugünden 2 gün öncedir. Geçen yılın dönemi yakın dönemin
+Bitiş tarihi, geç yayımlanan veriyi dışlamak için bugünden 2 gün öncedir. "Bugün" pazarın saat dilimine göre
+hesaplanır (`window.timezone`, varsayılan Europe/Istanbul); böylece Colab (UTC) ve yerel bilgisayar aynı dönemi
+kullanır. Google Trends günleri de aynı saat dilimine göre istenir. Geçen yılın dönemi yakın dönemin
 **364 gün** (52 hafta) öncesidir; böylece haftanın günleri hizalı kalır (hafta sonu etkisi karışmaz).
 
-Her istek `manifest.json`'a kaynak, terim, sorgu, dönem, çekilme zamanı (UTC), HTTP kodu, deneme sayısı ve durumla
+Her çalıştırma, üretildiği ortamı da kaydeder (git commit, Python ve paket sürümleri); ayrıntı:
+[ciktilar.md](ciktilar.md). Her istek `manifest.json`'a kaynak, terim, sorgu, dönem, çekilme zamanı (UTC), HTTP kodu, deneme sayısı ve durumla
 yazılır; ham yanıt `raw/` altında olduğu gibi saklanır; ayrıntılı istek kaydı `run.log`'dadır.
 
 ### İstek durumları
@@ -64,8 +67,14 @@ sonuç `manifest.json`'da `from_cache`, ilk `fetched_at` ve `cache_origin_run` i
 Trends'te ölçekleme istek başına yapıldığı için şart). Haftalık seride yalnızca 7 günü de pencereye düşen haftalar
 sayılır (28 günlük pencerede 3–4 hafta).
 
-Her iki karşılaştırmada:
-- ±%15 içi → "belirgin değişim yok" (`analysis.flat_threshold_pct`)
+Her iki karşılaştırmada bir değişimin "belirgin" sayılması için **iki koşul** birlikte aranır:
+- yüzde değişim en az ±%15 (`analysis.flat_threshold_pct`), **ve**
+- değişim günden güne olağan dalgalanmadan ayırt edilebilir: Welch t istatistiği |t| ≥ 2
+  (`analysis.min_t_stat`; `pop_t_stat`, `yoy_t_stat`). Ardışık günler birbirine bağlı olduğundan test iyimserdir;
+  bu yüzden tek başına değil, yüzde eşiğiyle birlikte kullanılır. Haftalık yıllık seride (3-4 nokta) test
+  uygulanmaz, yalnız yüzde eşiği geçerlidir.
+
+Ayrıca:
 - ortalamalar düşük hacim eşiğinin altındaysa → "düşük hacim — güvenilir değil" (`analysis.low_volume`)
 
 ## 4. Etiket (`trend_label`)

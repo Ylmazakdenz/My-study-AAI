@@ -44,6 +44,7 @@ class Source(ABC):
         self.retry_backoff = float(self.settings.get("retry_backoff_sec", 0))
         self._last_request = 0.0
         self._attempts = 0
+        self.timezone = "Europe/Istanbul"  # build_sources config'teki window.timezone ile ayarlar
 
     @property
     def description(self) -> str:

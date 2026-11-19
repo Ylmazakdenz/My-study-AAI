@@ -53,6 +53,18 @@ class WindowCfg(_Strict):
     end_offset_days: int = Field(2, ge=0)
     yoy: bool = True
     yoy_shift_days: int = Field(364, ge=300, le=400)
+    # "Bugün" bu saat dilimine göre hesaplanır (pazarın saat dilimi); Google Trends günleri de buna göre ister.
+    timezone: str = "Europe/Istanbul"
+
+    @field_validator("timezone")
+    @classmethod
+    def _tz_exists(cls, v: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"bilinmeyen saat dilimi: {v} (ör. Europe/Istanbul)") from None
+        return v
 
 
 class AnalysisCfg(_Strict):
@@ -63,6 +75,8 @@ class AnalysisCfg(_Strict):
 
     min_coverage: float = Field(0.8, ge=0, le=1)
     flat_threshold_pct: float = Field(15, gt=0)
+    # Gürültü testi: belirgin değişim için |t| en az bu olmalı (0 = kapalı). Bkz. analysis.welch_t
+    min_t_stat: float = Field(2.0, ge=0)
     min_window_days_ratio: float = Field(0.5, ge=0, le=1)
     # kaynak -> oran birimi (ör. gdelt: 10000 = "10.000 haberde", wikimedia: 1000000 = "milyon görüntülemede")
     normalize_by_norm: dict[str, float] = {}

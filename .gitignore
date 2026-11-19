@@ -225,3 +225,5 @@ __marimo__/
 # --- trendpipe ---
 # Her çalıştırma burada oluşur; repoya sadece data/sample/ altındaki örnek girer.
 data/runs/
+# İstek önbelleği (yerel)
+data/cache/

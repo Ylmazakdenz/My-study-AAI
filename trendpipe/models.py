@@ -49,7 +49,9 @@ class FetchResult:
     http_status: int | None = None
     error: str | None = None
     fetched_at: str | None = None     # ISO-8601 UTC
-    attempts: int = 0                 # kaç kez denendi (tekrar denemeler dahil)
+    attempts: int = 0                 # kaç kez denendi (tekrar denemeler dahil); önbellekten gelirse 0
+    from_cache: bool = False          # sonuç önbellekten mi geldi
+    cache_origin_run: str | None = None  # önbellekteki verinin ilk çekildiği çalıştırma
 
     def meta(self) -> dict:
         d = asdict(self)

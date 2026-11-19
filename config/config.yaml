@@ -46,6 +46,14 @@ analysis:
     wikimedia_en: 100    # günlük sayfa görüntüleme (İngilizce Vikipedi)
     gdelt: 3             # günlük haber sayısı
 
+# İstek önbelleği: aynı veri (kaynak + ayarlar + sorgu + dönem) bu süre içinde kaynaktan tekrar çekilmez.
+# Veri günlük ve dönem bitişi bugünden 2 gün önce olduğundan aynı gün içinde değişmez; ertesi gün dönem kayar ve
+# veri kendiliğinden yeniden çekilir. Yalnızca başarılı yanıtlar saklanır. Zorla yenilemek için: --refresh
+cache:
+  enabled: true
+  ttl_hours: 24
+  dir: "data/cache"
+
 sources:
   # Her anahtar bir kaynak örneğidir; "type" kaynağın tipidir. Aynı tipten birden fazla örnek olabilir.
   google_trends:

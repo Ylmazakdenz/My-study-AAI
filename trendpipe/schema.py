@@ -62,6 +62,12 @@ class SourceCfg(BaseModel):
     stop_after_consecutive_429: int = Field(0, ge=0)
 
 
+class CacheCfg(_Strict):
+    enabled: bool = True
+    ttl_hours: float = Field(24, ge=0)
+    dir: str = "data/cache"
+
+
 class TermCfg(_Strict):
     id: str = Field(pattern=r"^[a-z0-9_]+$")
     label: str
@@ -73,6 +79,7 @@ class AppCfg(_Strict):
     brand: BrandCfg
     window: WindowCfg = WindowCfg()
     analysis: AnalysisCfg = AnalysisCfg()
+    cache: CacheCfg = CacheCfg()
     sources: dict[str, SourceCfg]
     terms: list[TermCfg] = Field(min_length=1)
 

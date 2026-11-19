@@ -86,6 +86,17 @@ arası 15 sn, 429'da 60/120 sn bekleyip tekrar deneme eklendi.
   "geçen yıl" ifadesini ayrıca yıllık yönle karşılaştırır; düşüş etiketli terime "öne çıkar" önerisi reddedilir.
   Gerçek yanıt test olarak eklendi.
 
+## K13 — İstek önbelleği: 24 saat (19.11)
+
+- **Bulgu:** Google Trends 429'larının çoğu, geliştirme sırasında aynı verinin birkaç saat içinde tekrar tekrar
+  çekilmesinden geldi.
+- **Karar:** Başarılı yanıtlar 24 saat saklanır. Süre, verinin değişme sıklığına göre seçildi: veri günlük, dönem
+  bitişi bugünden 2 gün önce ve anahtar tarihleri içerdiği için ertesi gün kendiliğinden yeniden çekilir; daha kısa
+  bir süre (ör. 2 saat) aynı gün içindeki tekrar çalıştırmaları korumazdı. `--refresh` ile zorla yenilenir.
+- **Reddedilen seçenek — Google Trends'e toplu istek (5 terim/istek):** İstek sayısını azaltır ama Google tüm
+  terimleri en popüler olana göre ölçekleyip tam sayıya yuvarladığı için küçük terimler 0–3 aralığına sıkışır ve
+  çoğu "yeterli veri yok" (0) olur. Önbellek aynı kazancı veri kaybı olmadan sağladığı için eklenmedi.
+
 ## K9 — Ayar dosyası şemayla doğrulanır (19.11)
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden

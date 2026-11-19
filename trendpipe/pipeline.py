@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import __version__
 from .analysis import analyze_run
+from .cache import FetchCache, cache_key
 from .config import Window
 from .logs import attach_run_log, detach_run_log, get_logger
 from .models import FetchResult, FetchStatus, Term
@@ -30,12 +31,14 @@ def _skipped(src: Source, t: Term, q: str, start, end, series: str, status: str,
 
 
 def fetch_run(cfg: dict, terms: list[Term], window: Window, sources: list[Source], out_dir: str | Path,
-              config_file: str = "", on_result: Callable[[FetchResult, Term], None] | None = None) -> Path:
+              config_file: str = "", on_result: Callable[[FetchResult, Term], None] | None = None,
+              cache: FetchCache | None = None, refresh: bool = False) -> Path:
     """Tüm kaynak × terim × seri isteklerini yapar, ham ve düzenlenmiş veriyi kaydeder. Çalıştırma klasörünü döndürür.
 
     Her terim için iki seri çekilir:
       - main: önceki dönem + yakın dönem (günlük) → dönemsel karşılaştırma
       - yoy:  geçen yılın aynı döneminden bugüne (Google Trends'te haftalık) → yıllık karşılaştırma
+    Önbellekte süresi dolmamış başarılı sonuç varsa kaynağa gidilmez (refresh=True ise yok sayılır).
     """
     run_dir = new_run_dir(out_dir)
     handler = attach_run_log(run_dir)
@@ -63,9 +66,16 @@ def fetch_run(cfg: dict, terms: list[Term], window: Window, sources: list[Source
                                        f"Denenmedi: bu kaynak art arda {streak} istekte hız sınırına (HTTP 429) "
                                        "takıldı. Daha sonra ya da başka bir ağdan tekrar deneyin.")
                     else:
-                        res = src.fetch(t.id, q, start, end)
-                        res.series = series
-                        streak = streak + 1 if res.http_status == 429 else 0
+                        key = cache_key(src.type_name, src.settings, q, start, end) if cache else None
+                        res = cache.get(key) if (cache and not refresh) else None
+                        if res is not None:
+                            res.source, res.term_id, res.series = src.name, t.id, series
+                        else:
+                            res = src.fetch(t.id, q, start, end)
+                            res.series = series
+                            streak = streak + 1 if res.http_status == 429 else 0
+                            if cache:
+                                cache.put(key, res, run_dir.name)
                     log.info("%s/%s/%s: %s (%d nokta, %d deneme) %s", src.name, t.id, series, res.status,
                              len(res.points), res.attempts, res.error or "")
                     raw_file = save_raw(run_dir, res)
@@ -79,6 +89,8 @@ def fetch_run(cfg: dict, terms: list[Term], window: Window, sources: list[Source
         manifest = {
             "run_id": run_dir.name, "created_at": utc_now(), "tool_version": __version__,
             "config_file": str(config_file), "brand": cfg.get("brand", {}), "window": window.as_dict(),
+            "cache": ({"enabled": cache.enabled, "ttl_hours": cache.ttl_hours, "refresh": refresh}
+                      if cache else {"enabled": False}),
             "analysis_settings": cfg.get("analysis", {}),
             "sources": {s.name: {"metric": s.metric, "description": s.description, "settings": s.settings}
                         for s in sources},

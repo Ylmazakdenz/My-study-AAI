@@ -64,6 +64,7 @@ def gdelt_body(start: date, values: list[int]) -> dict:
 def cfg():
     return {
         "brand": {"name": "Test", "market": "TR", "season": "KŞ"},
+        "cache": {"enabled": False},          # testler birbirinin verisini okumasın
         "window": {"recent_days": 7, "baseline_days": 7, "end_offset_days": 2},
         "analysis": {"min_coverage": 0.8, "flat_threshold_pct": 15, "low_volume": {"wikimedia": 5, "gdelt": 1}},
         "sources": {"wikimedia": {"enabled": True, "project": "tr.wikipedia"},

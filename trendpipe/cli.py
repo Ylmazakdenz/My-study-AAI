@@ -16,6 +16,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from . import __version__
+from .cache import FetchCache
 from .config import ConfigError, Window, compute_window, llm_settings, load_config, load_env, parse_terms, user_agent
 from .llm import LLMError, interpret, ping, render_markdown
 from .logs import attach_run_log, detach_run_log, setup_console
@@ -61,7 +62,10 @@ def _print_fetch(res: FetchResult, t: Term) -> None:
     if res.attempts > 1:
         detail = f"({res.attempts}. deneme) {detail}"
     series = "yıllık" if res.series == "yoy" else "dönem"
-    print(f"  [{STATUS_ICON[res.status]:4}] {res.source:13} {series:6} {t.label:16} {res.query!r:22} {detail[:100]}")
+    icon = "ÖNB" if res.from_cache else STATUS_ICON[res.status]
+    if res.from_cache:
+        detail += f" — önbellek: {res.fetched_at} tarihli istek"
+    print(f"  [{icon:4}] {res.source:13} {series:6} {t.label:16} {res.query!r:22} {detail[:120]}")
 
 
 def cmd_fetch(args) -> Path:
@@ -74,11 +78,18 @@ def cmd_fetch(args) -> Path:
     print(f"Dönem: önceki {window.baseline_start}–{window.baseline_end} | yakın {window.recent_start}–"
           f"{window.recent_end}" + (f" | geçen yıl {window.ly_start}–{window.ly_end}" if window.has_yoy else ""))
     print(f"Kaynaklar: {', '.join(s.name for s in sources)} | Terimler: {', '.join(t.label for t in terms)}\n")
-    run_dir = fetch_run(cfg, terms, window, sources, args.out_dir, config_file=args.config, on_result=_print_fetch)
+    cc = cfg.get("cache") or {}
+    cache = FetchCache(cc.get("dir", "data/cache"), cc.get("ttl_hours", 24), cc.get("enabled", True))
+    run_dir = fetch_run(cfg, terms, window, sources, args.out_dir, config_file=args.config, on_result=_print_fetch,
+                        cache=cache, refresh=args.refresh)
     m = read_json(run_dir / "manifest.json")
     ok = sum(r["status"] == FetchStatus.OK for r in m["fetches"])
-    print(f"\n{ok}/{len(m['fetches'])} istek veri döndürdü. Kayıt: {run_dir}/ (manifest.json, raw/, processed/, "
-          "run.log)")
+    cached = sum(bool(r.get("from_cache")) for r in m["fetches"])
+    note = f" ({cached} tanesi önbellekten, kaynağa gidilmedi)" if cached else ""
+    print(f"\n{ok}/{len(m['fetches'])} istek veri döndürdü{note}. Kayıt: {run_dir}/ (manifest.json, raw/, "
+          "processed/, run.log)")
+    if cached and not args.refresh:
+        print(f"Önbellek süresi {cache.ttl_hours:g} saat; kaynaktan yeniden çekmek için: --refresh")
     if ok == 0:
         print("[UYARI] Hiç veri alınamadı; yukarıdaki hata mesajlarına bakın.", file=sys.stderr)
     return run_dir
@@ -162,6 +173,8 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--term", action="append", help="config dışı ek terim (tekrarlanabilir): --term 'Yelek'")
             sp.add_argument("--sources", help="kaynak seçimi, virgülle (config'teki adlar): google_trends,wikimedia")
             sp.add_argument("--end", help="dönem bitiş tarihi YYYY-MM-DD (varsayılan: bugün - end_offset_days)")
+            sp.add_argument("--refresh", action="store_true",
+                            help="önbelleği yok say, tüm veriyi kaynaktan yeniden çek")
         if run:
             sp.add_argument("--run", default="latest", help="çalıştırma klasörü ya da 'latest'")
             sp.add_argument("--use-run-config", action="store_true",

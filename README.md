@@ -41,7 +41,11 @@ trendpipe fetch                        # yalnızca veri çek        -> data/runs
 trendpipe analyze   --run latest       # yalnızca hesapla (ağ gerekmez)
 trendpipe interpret --run latest       # yalnızca yorumlat
 trendpipe -v fetch                     # ayrıntılı log
+trendpipe all --refresh                # önbelleği yok say, her şeyi kaynaktan yeniden çek
 ```
+
+Aynı veri (kaynak + ayarlar + sorgu + dönem) **24 saat** içinde kaynaktan tekrar çekilmez; önbellekten gelir ve
+terminalde `[ÖNB]` ile, kayıtta ilk çekilme zamanıyla işaretlenir. Yalnızca başarılı yanıtlar saklanır.
 
 Bağlantı olmadan, repodaki gerçek örnek veriyle:
 
@@ -96,6 +100,7 @@ trendpipe/
 ├── llm.py           # Ollama bağlantısı, öz-düzeltme döngüsü, rapor
 ├── checks.py        # model yanıtı denetimi — ileride Değerlendirme Ajanı'nın aracı
 ├── schema.py        # ayar dosyası doğrulaması
+├── cache.py         # istek önbelleği (24 saat, yalnız başarılı yanıtlar)
 ├── config.py · storage.py · logs.py · models.py
 config/config.yaml   # marka, dönem, kaynaklar, terimler (gizli bilgi yok)
 .env.example         # model adresi/adı (gizli bilgiler .env'de, repoya girmez)

@@ -31,6 +31,15 @@ Geçici hatalarda (zaman aşımı, 429, 5xx) artan beklemeyle tekrar denenir; su
 Bir kaynak art arda N istekte 429 alırsa kalan istekler denenmez ve "Denenmedi" olarak kaydedilir
 (`stop_after_consecutive_429`).
 
+### Önbellek
+
+Aynı veri 24 saat içinde kaynaktan tekrar çekilmez (`cache.ttl_hours`). Anahtar: kaynak tipi + veriyi etkileyen
+ayarlar (proje, bölge, dil, örnek sayısı) + sorgu + başlangıç/bitiş tarihi. Veri günlük ve dönem bitişi bugünden
+2 gün önce olduğu için aynı gün içinde değişmez; ertesi gün dönem kayar ve anahtar kendiliğinden değişir.
+Yalnızca başarılı yanıtlar saklanır; hata/429/boş yanıt sonraki çalıştırmada yeniden denenir. Önbellekten gelen
+sonuç `manifest.json`'da `from_cache`, ilk `fetched_at` ve `cache_origin_run` ile işaretlenir; ham yanıt yeni
+çalıştırmanın klasörüne de yazılır. `--refresh` önbelleği yok sayar.
+
 ## 2. Eksik veri: asla sıfır sayılmaz
 
 - Gelmeyen gün **eksik**tir. Bir pencerede günlerin %80'inden azı varsa değişim hesaplanmaz (`insufficient_data`).

@@ -1,6 +1,6 @@
 {
   "run_id": "20261118-231912",
-  "created_at": "2026-11-19T13:37:07+00:00",
+  "created_at": "2026-11-19T14:25:18+00:00",
   "window": {
     "baseline_start": "2026-09-22",
     "baseline_end": "2026-10-19",
@@ -9,6 +9,7 @@
   },
   "analysis_settings": {
     "min_coverage": 0.8,
+    "flat_threshold_pct": 15.0,
     "min_window_days_ratio": 0.5,
     "normalize_by_norm": [
       "gdelt"
@@ -17,12 +18,11 @@
     "zero_is_missing": [
       "google_trends"
     ],
-    "flat_threshold_pct": 15,
     "low_volume": {
-      "google_trends": 5,
-      "wikimedia": 20,
-      "wikimedia_en": 100,
-      "gdelt": 3
+      "google_trends": 5.0,
+      "wikimedia": 20.0,
+      "wikimedia_en": 100.0,
+      "gdelt": 3.0
     }
   },
   "rows": [
@@ -50,11 +50,15 @@
       "recent_slope_per_day": 0.006,
       "direction": "flat",
       "low_volume": true,
-      "notes": [
-        "Düşük hacim (ortalamalar < 20); küçük sayılardaki değişim gürültü olabilir."
-      ],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Düşük hacim (ortalamalar < 20.0); küçük sayılardaki değişim gürültü olabilir.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "weak",
+      "yoy_signal": null,
+      "trend_label": "dusuk_hacim",
       "rank_in_source": 6
     },
     {
@@ -81,11 +85,15 @@
       "recent_slope_per_day": -0.0416,
       "direction": "flat",
       "low_volume": true,
-      "notes": [
-        "Düşük hacim (ortalamalar < 20); küçük sayılardaki değişim gürültü olabilir."
-      ],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Düşük hacim (ortalamalar < 20.0); küçük sayılardaki değişim gürültü olabilir.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "weak",
+      "yoy_signal": null,
+      "trend_label": "dusuk_hacim",
       "rank_in_source": 3
     },
     {
@@ -112,11 +120,15 @@
       "recent_slope_per_day": -0.052,
       "direction": "flat",
       "low_volume": true,
-      "notes": [
-        "Düşük hacim (ortalamalar < 20); küçük sayılardaki değişim gürültü olabilir."
-      ],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Düşük hacim (ortalamalar < 20.0); küçük sayılardaki değişim gürültü olabilir.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "weak",
+      "yoy_signal": null,
+      "trend_label": "dusuk_hacim",
       "rank_in_source": 4
     },
     {
@@ -143,11 +155,15 @@
       "recent_slope_per_day": -0.0367,
       "direction": "up",
       "low_volume": true,
-      "notes": [
-        "Düşük hacim (ortalamalar < 20); küçük sayılardaki değişim gürültü olabilir."
-      ],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Düşük hacim (ortalamalar < 20.0); küçük sayılardaki değişim gürültü olabilir.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "weak",
+      "yoy_signal": null,
+      "trend_label": "dusuk_hacim",
       "rank_in_source": 1
     },
     {
@@ -174,11 +190,15 @@
       "recent_slope_per_day": 0.0131,
       "direction": "flat",
       "low_volume": true,
-      "notes": [
-        "Düşük hacim (ortalamalar < 20); küçük sayılardaki değişim gürültü olabilir."
-      ],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Düşük hacim (ortalamalar < 20.0); küçük sayılardaki değişim gürültü olabilir.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "weak",
+      "yoy_signal": null,
+      "trend_label": "dusuk_hacim",
       "rank_in_source": 2
     },
     {
@@ -205,11 +225,15 @@
       "recent_slope_per_day": -0.0443,
       "direction": "flat",
       "low_volume": true,
-      "notes": [
-        "Düşük hacim (ortalamalar < 20); küçük sayılardaki değişim gürültü olabilir."
-      ],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Düşük hacim (ortalamalar < 20.0); küçük sayılardaki değişim gürültü olabilir.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "weak",
+      "yoy_signal": null,
+      "trend_label": "dusuk_hacim",
       "rank_in_source": 5
     },
     {
@@ -236,9 +260,14 @@
       "recent_slope_per_day": 1.303,
       "direction": "flat",
       "low_volume": false,
-      "notes": [],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "flat",
+      "yoy_signal": null,
+      "trend_label": "degisim_yok",
       "rank_in_source": 4
     },
     {
@@ -265,9 +294,14 @@
       "recent_slope_per_day": 0.8306,
       "direction": "up",
       "low_volume": false,
-      "notes": [],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "strong_up",
+      "yoy_signal": null,
+      "trend_label": "artis_yillik_bilinmiyor",
       "rank_in_source": 3
     },
     {
@@ -294,9 +328,14 @@
       "recent_slope_per_day": 6.3848,
       "direction": "up",
       "low_volume": false,
-      "notes": [],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "strong_up",
+      "yoy_signal": null,
+      "trend_label": "artis_yillik_bilinmiyor",
       "rank_in_source": 1
     },
     {
@@ -323,9 +362,14 @@
       "recent_slope_per_day": 1.7395,
       "direction": "up",
       "low_volume": false,
-      "notes": [],
       "result": "computed",
+      "yoy_result": "not_fetched",
+      "notes": [
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
+      ],
       "signal": "strong_up",
+      "yoy_signal": null,
+      "trend_label": "artis_yillik_bilinmiyor",
       "rank_in_source": 2
     },
     {
@@ -341,10 +385,14 @@
       "recent_start": "2026-10-20",
       "recent_end": "2026-11-16",
       "result": "no_data",
+      "yoy_result": "not_fetched",
       "notes": [
-        "Veri alınamadı (error): HTTP 429: You are making too many requests to the API.\nPlease follow the best practices at https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits.\nIf you are unsure how to get the access you need, contact bo"
+        "Veri alınamadı (error): HTTP 429: You are making too many requests to the API.\nPlease follow the best practices at https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits.\nIf you are unsure how to get the access you need, contact bo",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "signal": "no_data"
+      "signal": "no_data",
+      "yoy_signal": null,
+      "trend_label": "veri_yok"
     },
     {
       "source": "wikimedia_en",
@@ -359,10 +407,14 @@
       "recent_start": "2026-10-20",
       "recent_end": "2026-11-16",
       "result": "no_data",
+      "yoy_result": "not_fetched",
       "notes": [
-        "Veri alınamadı (error): HTTP 429: You are making too many requests to the API.\nPlease follow the best practices at https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits.\nIf you are unsure how to get the access you need, contact bo"
+        "Veri alınamadı (error): HTTP 429: You are making too many requests to the API.\nPlease follow the best practices at https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits.\nIf you are unsure how to get the access you need, contact bo",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "signal": "no_data"
+      "signal": "no_data",
+      "yoy_signal": null,
+      "trend_label": "veri_yok"
     },
     {
       "source": "gdelt",
@@ -377,10 +429,14 @@
       "recent_start": "2026-10-20",
       "recent_end": "2026-11-16",
       "result": "no_data",
+      "yoy_result": "not_fetched",
       "notes": [
-        "Veri alınamadı (empty): GDELT bu sorgu ve dönem için eşleşen haber döndürmedi"
+        "Veri alınamadı (empty): GDELT bu sorgu ve dönem için eşleşen haber döndürmedi",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "signal": "no_data"
+      "signal": "no_data",
+      "yoy_signal": null,
+      "trend_label": "veri_yok"
     },
     {
       "source": "gdelt",
@@ -395,10 +451,14 @@
       "recent_start": "2026-10-20",
       "recent_end": "2026-11-16",
       "result": "no_data",
+      "yoy_result": "not_fetched",
       "notes": [
-        "Veri alınamadı (empty): GDELT bu sorgu ve dönem için eşleşen haber döndürmedi"
+        "Veri alınamadı (empty): GDELT bu sorgu ve dönem için eşleşen haber döndürmedi",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "signal": "no_data"
+      "signal": "no_data",
+      "yoy_signal": null,
+      "trend_label": "veri_yok"
     },
     {
       "source": "gdelt",
@@ -424,13 +484,17 @@
       "recent_slope_per_day": null,
       "direction": null,
       "low_volume": null,
+      "result": "insufficient_data",
+      "yoy_result": "not_fetched",
       "notes": [
         "Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme hacmi çok düşük 11 gün bozuk sayılıp çıkarıldı.",
         "Kaynak kesintisi: 28 gün tüm terimlerde eksik; bu günler sıfır sayılmadı, hesaba katılmadı.",
-        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı."
+        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "result": "insufficient_data",
-      "signal": "insufficient"
+      "signal": "insufficient",
+      "yoy_signal": null,
+      "trend_label": "hesaplanamadi"
     },
     {
       "source": "gdelt",
@@ -456,13 +520,17 @@
       "recent_slope_per_day": null,
       "direction": null,
       "low_volume": null,
+      "result": "insufficient_data",
+      "yoy_result": "not_fetched",
       "notes": [
         "Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme hacmi çok düşük 11 gün bozuk sayılıp çıkarıldı.",
         "Kaynak kesintisi: 28 gün tüm terimlerde eksik; bu günler sıfır sayılmadı, hesaba katılmadı.",
-        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı."
+        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "result": "insufficient_data",
-      "signal": "insufficient"
+      "signal": "insufficient",
+      "yoy_signal": null,
+      "trend_label": "hesaplanamadi"
     },
     {
       "source": "gdelt",
@@ -488,13 +556,17 @@
       "recent_slope_per_day": null,
       "direction": null,
       "low_volume": null,
+      "result": "insufficient_data",
+      "yoy_result": "not_fetched",
       "notes": [
         "Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme hacmi çok düşük 11 gün bozuk sayılıp çıkarıldı.",
         "Kaynak kesintisi: 28 gün tüm terimlerde eksik; bu günler sıfır sayılmadı, hesaba katılmadı.",
-        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı."
+        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "result": "insufficient_data",
-      "signal": "insufficient"
+      "signal": "insufficient",
+      "yoy_signal": null,
+      "trend_label": "hesaplanamadi"
     },
     {
       "source": "gdelt",
@@ -520,13 +592,17 @@
       "recent_slope_per_day": null,
       "direction": null,
       "low_volume": null,
+      "result": "insufficient_data",
+      "yoy_result": "not_fetched",
       "notes": [
         "Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme hacmi çok düşük 11 gün bozuk sayılıp çıkarıldı.",
         "Kaynak kesintisi: 28 gün tüm terimlerde eksik; bu günler sıfır sayılmadı, hesaba katılmadı.",
-        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı."
+        "Kaynak kesintisinden sonra pencerelerde çok az gün kaldı (önceki 15/28, yakın 13/28); değişim hesaplanmadı.",
+        "Yıllık seri çekilmedi (eski kayıt ya da kapalı)."
       ],
-      "result": "insufficient_data",
-      "signal": "insufficient"
+      "signal": "insufficient",
+      "yoy_signal": null,
+      "trend_label": "hesaplanamadi"
     }
   ]
 }

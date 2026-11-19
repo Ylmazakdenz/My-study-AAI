@@ -23,12 +23,19 @@ class ConfigError(ValueError):
 
 @dataclass
 class Window:
-    """Analiz penceresi: [baseline_start .. baseline_end] + [recent_start .. recent_end]."""
+    """Analiz pencereleri.
+
+    Dönemsel karşılaştırma: [baseline_start..baseline_end] → [recent_start..recent_end] (ardışık iki dönem).
+    Yıllık karşılaştırma:  [ly_start..ly_end] → [recent_start..recent_end]; ly = yakın dönemin 364 gün öncesi
+    (52 hafta: haftanın günleri hizalı kalır). Mevsimsel artışı gerçek değişimden ayırmak için kullanılır.
+    """
 
     baseline_start: date
     baseline_end: date
     recent_start: date
     recent_end: date
+    ly_start: date | None = None
+    ly_end: date | None = None
 
     @property
     def start(self) -> date:
@@ -38,8 +45,16 @@ class Window:
     def end(self) -> date:
         return self.recent_end
 
+    @property
+    def has_yoy(self) -> bool:
+        return self.ly_start is not None and self.ly_end is not None
+
     def as_dict(self) -> dict:
-        return {k: v.isoformat() for k, v in self.__dict__.items()}
+        return {k: v.isoformat() for k, v in self.__dict__.items() if v is not None}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> Window:
+        return cls(**{k: date.fromisoformat(v) for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
 def load_env(env_file: str | None = None) -> None:
@@ -52,11 +67,12 @@ def load_config(path: str | Path) -> dict:
     if not p.exists():
         raise ConfigError(f"Ayar dosyası bulunamadı: {p}")
     with p.open(encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-    for key in ("window", "analysis", "sources", "terms"):
-        if key not in cfg:
-            raise ConfigError(f"Ayar dosyasında '{key}' bölümü eksik: {p}")
-    return cfg
+        try:
+            cfg = yaml.safe_load(f) or {}
+        except yaml.YAMLError as exc:
+            raise ConfigError(f"Ayar dosyası YAML olarak okunamadı ({p}): {exc}") from exc
+    from .schema import validate_config
+    return validate_config(cfg, source=str(p))
 
 
 def parse_terms(cfg: dict, only_ids: list[str] | None = None, extra: list[str] | None = None) -> list[Term]:
@@ -105,14 +121,18 @@ def compute_window(cfg: dict, today: date | None = None, end: date | None = None
     recent_start = end - timedelta(days=recent - 1)
     baseline_end = recent_start - timedelta(days=1)
     baseline_start = baseline_end - timedelta(days=base - 1)
-    return Window(baseline_start, baseline_end, recent_start, end)
+    ly_start = ly_end = None
+    if w.get("yoy", True):
+        shift = timedelta(days=int(w.get("yoy_shift_days", 364)))
+        ly_start, ly_end = recent_start - shift, end - shift
+    return Window(baseline_start, baseline_end, recent_start, end, ly_start, ly_end)
 
 
 def llm_settings() -> dict:
     """Model bağlantı ayarları .env / ortam değişkenlerinden gelir; repoya yazılmaz."""
     return {
         "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-        "model": os.getenv("OLLAMA_MODEL", "llama3.2"),
+        "model": os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
         "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.2")),
         "timeout": float(os.getenv("OLLAMA_TIMEOUT", "300")),
     }

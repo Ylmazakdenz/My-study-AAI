@@ -41,6 +41,7 @@ class FetchResult:
     end: date
     status: str
     metric: str                       # değerin anlamı (ör. "pageviews", "article_count")
+    series: str = "main"              # "main": dönemsel karşılaştırma serisi, "yoy": geçen yıl + bu yıl uzun seri
     points: list[Point] = field(default_factory=list)
     raw_body: str | None = None       # kaynağın ham yanıtı (olduğu gibi kaydedilir)
     raw_ext: str = "json"

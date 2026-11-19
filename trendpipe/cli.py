@@ -1,11 +1,11 @@
-"""Komut satırı.
+"""Komut satırı (yalnızca argüman okuma ve ekrana yazma; iş pipeline.py'de).
 
-  python -m trendpipe check-llm                     # 1. gün: model bağlantısını test et
-  python -m trendpipe fetch                         # veriyi çek ve kaydet
-  python -m trendpipe analyze --run latest          # değişimi hesapla
-  python -m trendpipe interpret --run latest        # modele yorumlat
-  python -m trendpipe all                           # hepsi sırayla
-Kayıtlı veriyle (bağlantı olmadan) tekrar: analyze/interpret --run data/sample/<run_id>
+  trendpipe check-llm                       # model bağlantısını test et
+  trendpipe fetch                           # veriyi çek ve kaydet
+  trendpipe analyze --run latest            # değişimi hesapla (ağ gerekmez)
+  trendpipe interpret --run latest          # modele yorumlat
+  trendpipe all                             # hepsi sırayla
+`trendpipe` komutu yerine `python -m trendpipe` da kullanılabilir.
 """
 
 from __future__ import annotations
@@ -16,25 +16,25 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from . import __version__
-from .analysis import ANALYSIS_FIELDS, analyze_run, flatten_for_csv
 from .config import ConfigError, Window, compute_window, llm_settings, load_config, load_env, parse_terms, user_agent
-from .llm import LLMError, evidence_table, interpret, ping, to_markdown
-from .models import FetchStatus
-from .prompts import display_name
+from .llm import LLMError, interpret, ping, render_markdown
+from .logs import attach_run_log, detach_run_log, setup_console
+from .models import FetchResult, FetchStatus, Term
+from .pipeline import analyze_dir, fetch_run
+from .prompts import TREND_TR, display_name
 from .sources import build_sources
-from .storage import (new_run_dir, read_json, read_timeseries, resolve_run_dir, save_raw, write_csv, write_json,
-                      write_timeseries)
+from .storage import read_json, resolve_run_dir, write_json
 
 STATUS_ICON = {FetchStatus.OK: "OK ", FetchStatus.EMPTY: "BOŞ", FetchStatus.NOT_FOUND: "YOK",
                FetchStatus.ERROR: "HATA", FetchStatus.SKIPPED: "ATLA"}
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
 def _csv_list(s: str | None) -> list[str] | None:
     return [x.strip() for x in s.split(",") if x.strip()] if s else None
+
+
+def _pct(v) -> str:
+    return f"{v:+.1f}%" if v is not None else "-"
 
 
 # ---------------- komutlar ----------------
@@ -51,96 +51,53 @@ def cmd_check_llm(args) -> int:
     return 0
 
 
+def _print_fetch(res: FetchResult, t: Term) -> None:
+    if res.status == FetchStatus.OK:
+        detail = f"{len(res.points)} nokta"
+        if res.error:
+            detail += f" ({res.error})"
+    else:
+        detail = " ".join((res.error or "").split())
+    if res.attempts > 1:
+        detail = f"({res.attempts}. deneme) {detail}"
+    series = "yıllık" if res.series == "yoy" else "dönem"
+    print(f"  [{STATUS_ICON[res.status]:4}] {res.source:13} {series:6} {t.label:16} {res.query!r:22} {detail[:100]}")
+
+
 def cmd_fetch(args) -> Path:
     cfg = load_config(args.config)
     terms = parse_terms(cfg, _csv_list(args.terms), args.term)
-    end = date.fromisoformat(args.end) if args.end else None
-    window = compute_window(cfg, end=end)
+    window = compute_window(cfg, end=date.fromisoformat(args.end) if args.end else None)
     sources = build_sources(cfg, _csv_list(args.sources), user_agent=user_agent())
     if not sources:
         raise ConfigError("Açık kaynak yok. config'te 'enabled: true' yapın ya da --sources verin.")
-
-    run_dir = new_run_dir(args.out_dir)
-    print(f"Çalıştırma: {run_dir}")
-    print(f"Dönem: {window.start} → {window.end}  (önceki {window.baseline_start}–{window.baseline_end}, "
-          f"yakın {window.recent_start}–{window.recent_end})")
+    print(f"Dönem: önceki {window.baseline_start}–{window.baseline_end} | yakın {window.recent_start}–"
+          f"{window.recent_end}" + (f" | geçen yıl {window.ly_start}–{window.ly_end}" if window.has_yoy else ""))
     print(f"Kaynaklar: {', '.join(s.name for s in sources)} | Terimler: {', '.join(t.label for t in terms)}\n")
-
-    terms_by_id = {t.id: t for t in terms}
-    results, records = [], []
-    for src in sources:
-        # Kaynak art arda hız sınırı (429) döndürürse kalan terimler denenmez: aynı sonucu almak için
-        # dakikalarca beklemek yerine durumu açıkça kaydederiz (ör. Colab'ın ortak IP'si GDELT'te sınırda).
-        limit = int(src.settings.get("stop_after_consecutive_429", 0) or 0)
-        streak = 0
-        for t in terms:
-            q = t.queries.get(src.name)
-            if q and limit and streak >= limit:
-                res = src._result(t.id, q, window.start, window.end, status=FetchStatus.ERROR, attempts=0,
-                                  error=f"Denenmedi: bu kaynak art arda {streak} istekte hız sınırına (HTTP 429) "
-                                        "takıldı. Daha sonra ya da başka bir ağdan tekrar deneyin.")
-            elif not q:
-                res = src._result(t.id, "", window.start, window.end, status=FetchStatus.SKIPPED,
-                                  error=f"Bu terim için '{src.name}' sorgusu tanımlı değil")
-            else:
-                res = src.fetch(t.id, q, window.start, window.end)
-            if q and res.attempts:
-                streak = streak + 1 if res.http_status == 429 else 0
-            raw_file = save_raw(run_dir, res)
-            rec = {**res.meta(), "label": t.label, "category": t.category, "raw_file": raw_file}
-            records.append(rec)
-            if res.status == FetchStatus.OK:
-                results.append(res)
-            detail = f"{len(res.points)} gün" if res.status == FetchStatus.OK else " ".join((res.error or "").split())
-            if res.attempts > 1:
-                detail = f"({res.attempts}. deneme) {detail}"
-            print(f"  [{STATUS_ICON[res.status]:4}] {src.name:13} {t.label:18} {q!r:24} {detail[:110]}")
-
-    write_timeseries(run_dir, results, terms_by_id)
-    manifest = {
-        "run_id": run_dir.name, "created_at": _now(), "tool_version": __version__,
-        "config_file": str(args.config), "brand": cfg.get("brand", {}), "window": window.as_dict(),
-        "analysis_settings": cfg.get("analysis", {}),
-        "sources": {s.name: {"metric": s.metric, "description": s.description, "settings": s.settings}
-                    for s in sources},
-        "fetches": records,
-    }
-    write_json(run_dir / "manifest.json", manifest)
-    ok = sum(r["status"] == FetchStatus.OK for r in records)
-    print(f"\n{ok}/{len(records)} istek veri döndürdü. Kayıt: {run_dir}/manifest.json, raw/, processed/timeseries.csv")
+    run_dir = fetch_run(cfg, terms, window, sources, args.out_dir, config_file=args.config, on_result=_print_fetch)
+    m = read_json(run_dir / "manifest.json")
+    ok = sum(r["status"] == FetchStatus.OK for r in m["fetches"])
+    print(f"\n{ok}/{len(m['fetches'])} istek veri döndürdü. Kayıt: {run_dir}/ (manifest.json, raw/, processed/, "
+          "run.log)")
     if ok == 0:
         print("[UYARI] Hiç veri alınamadı; yukarıdaki hata mesajlarına bakın.", file=sys.stderr)
     return run_dir
 
 
-def _window_from_manifest(m: dict) -> Window:
-    w = m["window"]
-    return Window(*(date.fromisoformat(w[k]) for k in ("baseline_start", "baseline_end", "recent_start", "recent_end")))
-
-
 def cmd_analyze(args, run_dir: Path | None = None) -> Path:
     run_dir = run_dir or resolve_run_dir(args.run, args.out_dir)
-    manifest = read_json(run_dir / "manifest.json")
-    # Analiz ayarları varsayılan olarak GÜNCEL config'ten alınır (düzeltilen yöntemler eski kayıtlara da uygulansın).
-    # Çalıştırma anındaki ayarlarla birebir tekrar için: --use-run-config. Kullanılan ayarlar analysis.json'a yazılır.
+    # Analiz ayarları varsayılan olarak GÜNCEL config'ten alınır (düzeltilen yöntemler eski kayıtlara da uygulanır);
+    # --use-run-config ile çalıştırma anındaki ayarlar kullanılır. Kullanılan ayarlar analysis.json'a yazılır.
     if getattr(args, "use_run_config", False):
-        cfg = {"analysis": manifest.get("analysis_settings", {})}
+        a = read_json(run_dir / "manifest.json").get("analysis_settings", {})
     else:
-        cfg = {"analysis": load_config(args.config).get("analysis", {})}
-    rows = analyze_run(manifest, read_timeseries(run_dir), cfg, _window_from_manifest(manifest))
-    write_json(run_dir / "analysis.json", {"run_id": manifest["run_id"], "created_at": _now(),
-                                           "window": manifest["window"], "analysis_settings": cfg["analysis"],
-                                           "rows": rows})
-    write_csv(run_dir / "analysis.csv", flatten_for_csv(rows), ANALYSIS_FIELDS)
-
+        a = load_config(args.config)["analysis"]
+    rows = analyze_dir(run_dir, a)
     print(f"Analiz: {run_dir}/analysis.csv\n")
-    print(f"  {'kaynak':13} {'terim':18} {'önceki ort':>11} {'yakın ort':>10} {'değişim':>9}  yön   durum")
+    print(f"  {'kaynak':13} {'terim':16} {'dönemsel':>9} {'yıllık':>9}  etiket")
     for r in sorted(rows, key=lambda r: (r["source"], -(r.get("pct_change") or -1e9))):
-        pct = f"{r['pct_change']:+.1f}%" if r.get("pct_change") is not None else "-"
-        bm = f"{r['baseline_mean']:.1f}" if r.get("baseline_mean") is not None else "-"
-        rm = f"{r['recent_mean']:.1f}" if r.get("recent_mean") is not None else "-"
-        print(f"  {r['source']:13} {r['label']:18} {bm:>11} {rm:>10} {pct:>9}  {r.get('direction') or '-':5} "
-              f"{r['result']}")
+        print(f"  {r['source']:13} {r['label']:16} {_pct(r.get('pct_change')):>9} "
+              f"{_pct(r.get('yoy_pct_change')):>9}  {TREND_TR.get(r['trend_label'], r['trend_label'])}")
     return run_dir
 
 
@@ -149,26 +106,33 @@ def cmd_interpret(args, run_dir: Path | None = None) -> int:
     manifest = read_json(run_dir / "manifest.json")
     if not (run_dir / "analysis.json").exists():
         cmd_analyze(args, run_dir)
-    rows = read_json(run_dir / "analysis.json")["rows"]
+    analysis = read_json(run_dir / "analysis.json")
+    rows = analysis["rows"]
     used = {r["source"] for r in rows}
-    context = {"brand": manifest.get("brand", {}), "window": manifest["window"],
-               "sources": {k: {"display": display_name(k, v), "description": v["description"]}
-                           for k, v in manifest["sources"].items() if k in used},
-               "flat_threshold_pct": (manifest.get("analysis_settings") or {}).get("flat_threshold_pct", 15)}
+    sources = {k: {"display": display_name(k, v), "description": v["description"]}
+               for k, v in manifest["sources"].items() if k in used}
+    context = {"brand": manifest.get("brand", {}), "window": manifest["window"], "sources": sources,
+               "flat_threshold_pct": (analysis.get("analysis_settings") or {}).get("flat_threshold_pct", 15)}
     s = llm_settings()
     print(f"\nModele gönderiliyor: host={s['host']} model={s['model']} ...")
+    handler = attach_run_log(run_dir)
     try:
         out = interpret(rows, context, s)
-        out["evidence"] = evidence_table(rows, {k: v["display"] for k, v in context["sources"].items()})
     except LLMError as exc:
         print(f"[HATA] {exc}", file=sys.stderr)
         return 2
-    meta = {"model": s["model"], "temperature": s["temperature"], "created_at": _now(),
+    finally:
+        detach_run_log(handler)
+    meta = {"model": s["model"], "temperature": s["temperature"],
+            "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "run_id": manifest["run_id"], "window": manifest["window"]}
+    names = {k: v["display"] for k, v in sources.items()}
     # host adresi kaydedilmez (özel ağ/tünel adresi olabilir).
-    write_json(run_dir / "interpretation.json", {**meta, "elapsed_sec": out["elapsed_sec"], "check": out["check"],
-                                                 "prompt": out["messages"], "response": out["content"]})
-    md = to_markdown(out, meta)
+    write_json(run_dir / "interpretation.json", {**meta, "elapsed_sec": out["elapsed_sec"],
+                                                 "review": out["review"], "chosen_attempt": out["chosen_attempt"],
+                                                 "response": out["data"], "attempts": out["attempts"],
+                                                 "prompt": out["messages"][:2]})
+    md = render_markdown(out, rows, names, meta)
     (run_dir / "interpretation.md").write_text(md, encoding="utf-8")
     print("\n" + md)
     print(f"Kayıt: {run_dir}/interpretation.md")
@@ -179,9 +143,7 @@ def cmd_all(args) -> int:
     run_dir = cmd_fetch(args)
     print()
     cmd_analyze(args, run_dir)
-    if args.skip_llm:
-        return 0
-    return cmd_interpret(args, run_dir)
+    return 0 if args.skip_llm else cmd_interpret(args, run_dir)
 
 
 # ---------------- argparse ----------------
@@ -189,15 +151,16 @@ def cmd_all(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="trendpipe", description="Giyim trend veri hattı")
     p.add_argument("--version", action="version", version=__version__)
+    p.add_argument("-v", "--verbose", action="store_true", help="ayrıntılı log (istekler, tekrar denemeler)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def common(sp, fetch=False, run=False):
         sp.add_argument("--config", default="config/config.yaml", help="ayar dosyası (varsayılan: config/config.yaml)")
-        sp.add_argument("--out-dir", default="data/runs", help="çalıştırmaların kaydedileceği klasör")
+        sp.add_argument("--out-dir", default="data/runs", help="çalıştırmaların bulunduğu klasör")
         if fetch:
             sp.add_argument("--terms", help="sadece bu terim id'leri, virgülle: trenckot,hirka")
             sp.add_argument("--term", action="append", help="config dışı ek terim (tekrarlanabilir): --term 'Yelek'")
-            sp.add_argument("--sources", help="kaynak seçimi, virgülle (config'teki adlar): wikimedia,gdelt")
+            sp.add_argument("--sources", help="kaynak seçimi, virgülle (config'teki adlar): google_trends,wikimedia")
             sp.add_argument("--end", help="dönem bitiş tarihi YYYY-MM-DD (varsayılan: bugün - end_offset_days)")
         if run:
             sp.add_argument("--run", default="latest", help="çalıştırma klasörü ya da 'latest'")
@@ -227,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     _utf8_console()
     load_env()
     args = build_parser().parse_args(argv)
+    setup_console(args.verbose)
     try:
         if args.cmd == "check-llm":
             return cmd_check_llm(args)
@@ -244,3 +208,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[HATA] {exc}", file=sys.stderr)
         return 1
     return 1
+
+
+__all__ = ["main", "Window"]

@@ -15,6 +15,10 @@ window:
   baseline_days: 28
   # Kaynaklar son 1-2 günü geç/eksik yayımlayabildiği için bitiş tarihi bugünden bu kadar gün geridedir.
   end_offset_days: 2
+  # Yıllık karşılaştırma: yakın dönem, geçen yılın aynı dönemiyle (52 hafta = 364 gün önce) karşılaştırılır.
+  # Giyimde ilgi mevsimle değişir; bu karşılaştırma "mevsimsel artış" ile "sezon üstü artış"ı ayırır.
+  yoy: true
+  yoy_shift_days: 364
 
 analysis:
   # Bir pencerede verinin en az bu oranı mevcut değilse değişim HESAPLANMAZ (eksik veri sıfır sayılmaz).
@@ -48,6 +52,9 @@ sources:
     hl: "tr-TR"
     request_interval_sec: 10
     stop_after_consecutive_429: 2
+    # Google aramaların örneklemini kullanır; aynı istek birkaç kez tekrarlanıp ortalaması alınabilir
+    # (istek sayısı katlanır, 429 riski artar). Varsayılan 1.
+    samples: 1
   wikimedia:
     type: wikimedia
     enabled: true

@@ -6,7 +6,8 @@
 Yerel bilgisayarda (Mac, ev interneti, PyCharm) 19.11.2026'da `python -m trendpipe all --skip-llm` ile çekildi.
 **18/18 istek başarılı:** Google Trends (Türkiye, ana kaynak), Türkçe ve İngilizce Vikipedi. Dönem 23.09.2026 –
 17.11.2026. Google Trends'te "kaşe kaban" sorgusunda 2 gün 0 (Google'a göre "yeterli veri yok") var; analizde bu
-günler eksik sayıldı. Model yorumu Colab'da 6a hücresiyle üretilir.
+günler eksik sayıldı. Bu çalıştırmada yıllık seri yoktur (yıllık karşılaştırma sonradan eklendi); analizde "geçen yılla
+karşılaştırılamadı" olarak görünür. Yıllık karşılaştırmalı tam örnek bir sonraki yerel çalıştırmayla eklenecek.
 
 ## 20261118-233854
 Colab, 18.11.2026, tekrar deneme kodunun eklendiği sürüm. **Türkçe ve İngilizce Vikipedi'nin 12 isteğinin hepsi
@@ -27,12 +28,15 @@ Bu klasör, gerçek kaynaklardan çekilmiş ve repoya eklenmiş örnek çalışt
 olduğunda hesaplama ve model yorumu bu verilerle tekrar denenir:
 
 ```bash
-python -m trendpipe analyze   --out-dir data/sample --run latest
-python -m trendpipe interpret --out-dir data/sample --run latest
+trendpipe analyze   --out-dir data/sample --run latest
+trendpipe interpret --out-dir data/sample --run latest
 ```
 
 Yeni örnek oluşturmak için (gerçek veri çeker):
 
 ```bash
-python -m trendpipe all --out-dir data/sample --skip-llm
+trendpipe all --out-dir data/sample
 ```
+
+Not: 18.11 tarihli iki çalıştırmanın `interpretation.*` dosyaları, model çıktısı JSON şemasına geçmeden önceki
+(serbest metin) biçimdedir; tarihsel kayıt olarak bırakılmıştır.

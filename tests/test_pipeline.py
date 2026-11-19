@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import date
 
 import yaml
-
 from conftest import FakeResponse, FakeSession, gdelt_body, wiki_body
+
 from trendpipe import cli
 from trendpipe.analysis import Result, analyze_series
+from trendpipe.checks import check_numbers
 from trendpipe.config import compute_window, parse_terms
-from trendpipe.llm import check_numbers
 from trendpipe.models import FetchStatus, Point
 from trendpipe.sources.gdelt import GdeltSource, parse_timeline
 from trendpipe.sources.wikimedia import WikimediaSource
@@ -202,7 +202,7 @@ def _colab_rows():
 
 def test_claim_check_catches_colab_mistakes():
     """1. Colab denemesindeki llama3.2 hataları."""
-    from trendpipe.llm import check_output
+    from trendpipe.checks import check_output
     bad = ("## 1. Öne çıkan terimler\n- Palto: popülerlik kazanıyor.\n- Kazak: popülerlik kazanıyor.\n"
            "## 4. Bu veriyle söyleyemediklerimiz\n"
            "- Trençkot: Veri alınamadı (wikimedia'dan), therefore unavailable.\n")
@@ -220,7 +220,8 @@ def test_claim_check_on_real_run2_answer():
     """2. Colab denemesindeki gerçek llama3.2 yanıtı + aynı çalıştırmanın gerçek verisi (data/sample)."""
     import json
     from pathlib import Path
-    from trendpipe.llm import check_output
+
+    from trendpipe.checks import check_output
     root = Path(__file__).resolve().parents[1]
     rows = json.loads((root / "data/sample/20261118-231912/analysis.json").read_text(encoding="utf-8"))["rows"]
     text = (root / "tests/fixtures/llama32_run2_response.md").read_text(encoding="utf-8")
@@ -232,7 +233,7 @@ def test_claim_check_on_real_run2_answer():
 
 
 def test_claim_check_accepts_correct_answer():
-    from trendpipe.llm import check_output
+    from trendpipe.checks import check_output
     good = ("## 1. Öne çıkan terimler\n- Güvenilir bir değişim gösteren terim yok.\n"
             "- Kazak (wikimedia) %+56,1 arttı ancak düşük hacim nedeniyle güvenilir değil.\n"
             "## 4. Bu veriyle söyleyemediklerimiz\n- Trençkot için gdelt verisi alınamadı.\n")
@@ -249,12 +250,14 @@ def _ctx():
 
 
 def test_prompt_groups_and_reasons():
+    from trendpipe.analysis import trend_label
     from trendpipe.prompts import build_user_prompt
     rows = _colab_rows()
     for r in rows:
         r.update({k: v for k, v in _ctx()["window"].items()})
+        r["trend_label"] = trend_label(r["signal"], None)
     p = build_user_prompt(rows, _ctx())
-    assert "GÜVENİLİR YÜKSELİŞ:\n- (yok)" in p                      # Kazak düşük hacimli -> güvenilir değil
+    assert "ADAY LİSTESİ (one_cikanlar yalnızca bunlardan seçilir):\n- (aday yok)" in p   # Kazak düşük hacimli
     limits = p.split("SINIRLAR")[1]
     assert "Türkçe Vikipedi: Kazak, Kot pantolon, Palto, Trençkot için hacim çok düşük" in limits
     assert "GDELT haberleri: Trençkot — kaynak zamanında yanıt vermedi" in limits
@@ -274,6 +277,7 @@ def test_display_names():
 
 def test_source_wide_gap_excluded(cfg):
     from datetime import timedelta
+
     from trendpipe.analysis import analyze_series, source_gap_days
     w = window(cfg)
     missing = {w.start + timedelta(days=i) for i in (1, 2, 9)}            # tüm terimlerde aynı günler eksik
@@ -366,7 +370,8 @@ def test_claim_check_bold_headings_real_run3():
     ayıramadığı için sınırlar listesini hata sanıyordu (yanlış alarm). İçerik doğru olduğundan ✅ beklenir."""
     import json
     from pathlib import Path
-    from trendpipe.llm import check_output, split_sections
+
+    from trendpipe.checks import check_output, split_sections
     root = Path(__file__).resolve().parents[1]
     rows = json.loads((root / "data/sample/20261118-233854/analysis.json").read_text(encoding="utf-8"))["rows"]
     text = (root / "tests/fixtures/llama31_8b_run3_response.md").read_text(encoding="utf-8")
@@ -377,8 +382,8 @@ def test_claim_check_bold_headings_real_run3():
 
 def test_stops_after_consecutive_429(cfg, tmp_path, monkeypatch):
     import json
-    w = window(cfg)
     cfg["sources"] = {"gdelt": {"enabled": True, "request_interval_sec": 0, "stop_after_consecutive_429": 2}}
+    cfg["analysis"]["low_volume"] = {}
     cfg["terms"] = [{"id": f"t{i}", "label": f"T{i}", "queries": {"gdelt": f"q{i}"}} for i in range(4)]
     sess = FakeSession({}, default=FakeResponse(429, "Please limit requests"))
     import trendpipe.sources as srcmod
@@ -418,6 +423,7 @@ def _fake_pytrends(monkeypatch, df=None, exc=None):
 
 def test_google_trends_parses_and_drops_partial(monkeypatch, cfg):
     import pandas as pd
+
     from trendpipe.sources.google_trends import GoogleTrendsSource
     w = window(cfg)
     idx = pd.date_range(w.start, w.end, freq="D")
@@ -439,6 +445,7 @@ def test_google_trends_429_triggers_breaker_code(monkeypatch, cfg):
 
 def test_default_config_sources():
     from pathlib import Path
+
     from trendpipe.config import load_config
     from trendpipe.sources import build_sources
     cfg2 = load_config(Path(__file__).resolve().parents[1] / "config/config.yaml")
@@ -448,14 +455,15 @@ def test_default_config_sources():
 def test_google_trends_zero_is_missing(cfg):
     """Google Trends'te 0 = yeterli veri yok -> eksik gün (19.11.2026 'kaşe kaban' örneği: 2 gün 0)."""
     from datetime import timedelta
+
     from trendpipe.analysis import analyze_run
     w = window(cfg)
     vals = [0, 30, 0, 30, 30, 30, 30] + [60] * 7                         # pencereler 7+7 gün
     pts = [Point(w.start + timedelta(days=i), v) for i, v in enumerate(vals)]
     manifest = {"fetches": [{"source": "google_trends", "term_id": "p", "label": "Palto", "status": "ok"}]}
     a = {"analysis": {"min_coverage": 0.7, "zero_is_missing": ["google_trends"]}}
-    r = analyze_run(manifest, {("google_trends", "p"): pts}, a, w)[0]
+    r = analyze_run(manifest, {("google_trends", "p", "main"): pts}, a, w)[0]
     assert r["baseline_mean"] == 30.0 and r["pct_change"] == 100.0       # sıfırlar ortalamayı düşürmedi
     assert any("eksik sayıldı" in n for n in r["notes"])
-    r0 = analyze_run(manifest, {("google_trends", "p"): pts}, {"analysis": {"min_coverage": 0.7}}, w)[0]
+    r0 = analyze_run(manifest, {("google_trends", "p", "main"): pts}, {"analysis": {"min_coverage": 0.7}}, w)[0]
     assert r0["pct_change"] > 100                                         # kural kapalıyken yapay yüksek

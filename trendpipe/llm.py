@@ -1,25 +1,46 @@
-"""Model bağlantısı — hocanın notebook'undaki yöntem (`ollama` Python paketi + Ollama sunucusu).
+"""Model bağlantısı ve yorum adımı.
 
-Hocanın kodu `ollama.chat(model='llama3.2', ...)` çağırır; bu varsayılan olarak http://localhost:11434 adresine gider.
-Burada aynı çağrıyı `ollama.Client(host=...)` ile yapıyoruz; böylece adres .env'den değiştirilebilir:
-  - Colab'da (hocanın kurulumu): OLLAMA_HOST=http://localhost:11434
-  - Kendi bilgisayarınızda Ollama kuruluysa: yine http://localhost:11434
+Bağlantı yöntemi hocanın notebook'undakiyle aynıdır: `ollama` Python paketi + Ollama sunucusu. Hocanın kodu
+`ollama.chat(model=..., ...)` çağırır (varsayılan adres http://localhost:11434); burada aynı çağrı
+`ollama.Client(host=...)` ile yapılır, böylece adres ve model .env'den değiştirilebilir (yerel Ollama ya da Colab).
+
+Yorum adımı (interpret):
+1. Python adayları, kanıtları ve sınırları hazırlar (prompts.py).
+2. Model JSON şemasına uyan yanıt verir (Ollama `format` parametresi).
+3. Yanıt denetlenir (checks.review). Sorun varsa model, sorunlar listelenerek bir kez daha yanıtlamaya çağrılır
+   (öz-düzeltme döngüsü). En az sorunlu yanıt kullanılır; kalan sorunlar raporda açıkça yazılır.
+4. Rapor (markdown) Python tarafından oluşturulur.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import time
 
-from .prompts import SYSTEM_PROMPT, build_user_prompt
+from .checks import review
+from .logs import get_logger
+from .prompts import (
+    CANDIDATE_LABELS,
+    RESPONSE_SCHEMA,
+    SYSTEM_PROMPT,
+    TREND_TR,
+    _num,
+    _pct,
+    build_user_prompt,
+    candidates,
+    evidence_line,
+    limitations,
+    reason_tr,
+)
+
+log = get_logger("llm")
 
 
 class LLMError(RuntimeError):
     pass
 
 
-def chat(messages: list[dict], settings: dict) -> dict:
+def chat(messages: list[dict], settings: dict, fmt: dict | str | None = None) -> dict:
     try:
         import ollama  # type: ignore
     except ImportError as exc:
@@ -27,233 +48,141 @@ def chat(messages: list[dict], settings: dict) -> dict:
 
     client = ollama.Client(host=settings["host"], timeout=settings.get("timeout"))
     t0 = time.monotonic()
+    kwargs = {"format": fmt} if fmt is not None else {}
     try:
         resp = client.chat(model=settings["model"], messages=messages,
-                           options={"temperature": settings.get("temperature", 0.2)})
+                           options={"temperature": settings.get("temperature", 0.2)}, **kwargs)
     except Exception as exc:  # bağlantı reddi, model yok, zaman aşımı...
         hint = ""
         msg = str(exc).lower()
         if "connect" in msg or "refused" in msg:
-            hint = (" | İpucu: Ollama sunucusu çalışıyor mu? Colab'da notebook'un 'ollama serve' hücresini, "
-                    "yerelde 'ollama serve' komutunu çalıştırın ve OLLAMA_HOST'u kontrol edin.")
+            hint = (" | İpucu: Ollama çalışıyor mu? Mac'te Ollama uygulamasını açın (ya da terminalde "
+                    "'ollama serve'); Colab'da notebook'un sunucu hücresini çalıştırın. OLLAMA_HOST'u kontrol edin.")
         elif "not found" in msg:
-            hint = f" | İpucu: model indirilmemiş olabilir: ollama pull {settings['model']}"
+            hint = (f" | İpucu: model indirilmemiş olabilir: ollama pull {settings['model']} "
+                    "(ya da .env'deki OLLAMA_MODEL'i indirdiğiniz modelle değiştirin)")
         raise LLMError(f"{type(exc).__name__}: {exc}{hint}") from exc
-    content = resp["message"]["content"]
-    return {"content": content, "elapsed_sec": round(time.monotonic() - t0, 2)}
+    return {"content": resp["message"]["content"], "elapsed_sec": round(time.monotonic() - t0, 2)}
 
 
 def ping(settings: dict) -> dict:
-    """1. gün: bağlantıyı doğrulamak için basit istek."""
+    """Bağlantıyı doğrulamak için basit istek."""
     return chat([{"role": "user", "content": "Bağlantı testi. Sadece 'Merhaba, bağlantı çalışıyor.' yaz."}],
                 settings)
 
 
-def interpret(analysis_rows: list[dict], context: dict, settings: dict) -> dict:
-    user_prompt = build_user_prompt(analysis_rows, context)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}]
-    out = chat(messages, settings)
-    out["check"] = check_output(out["content"], analysis_rows)
-    out["messages"] = messages
-    return out
-
-
-_PCT = re.compile(r"([-+−]?\d+(?:[.,]\d+)?)\s*%|%\s*([-+−]?\d+(?:[.,]\d+)?)")
-
-
-def check_numbers(text: str, rows: list[dict], tol: float = 1.0) -> dict:
-    """Modelin yazdığı yüzdelerin hesapladığımız değerlerle örtüşüp örtüşmediğini kontrol eder.
-
-    Küçük modeller sayı uydurabilir; eşleşmeyen yüzdeler raporlanır (açıklanabilirlik / güvenlik kontrolü).
-    """
-    allowed = []
-    for r in rows:
-        for key in ("pct_change", "baseline_coverage", "recent_coverage"):
-            v = r.get(key)
-            if v is None:
-                continue
-            allowed.append(abs(v * 100) if key.endswith("coverage") else abs(v))
-    found, unmatched = [], []
-    for m in _PCT.finditer(text):
-        raw = (m.group(1) or m.group(2)).replace(",", ".").replace("−", "-")
+def _parse(content: str):
+    try:
+        return json.loads(content)
+    except (ValueError, TypeError):
+        # Bazı modeller JSON'u ```json ... ``` içine alabiliyor
+        s = content.strip().strip("`")
+        if s.lower().startswith("json"):
+            s = s[4:]
         try:
-            val = abs(float(raw))
-        except ValueError:
-            continue
-        found.append(val)
-        if not any(abs(val - a) <= tol for a in allowed):
-            unmatched.append(val)
-    return {"percentages_found": found, "unmatched_percentages": unmatched,
-            "ok": not unmatched,
-            "note": ("Modelin yazdığı tüm yüzdeler hesaplanan değerlerle uyumlu." if not unmatched else
-                     "Modelin yazdığı bazı yüzdeler hesaplanan sonuçlarda yok; yorum dikkatle okunmalı.")}
+            return json.loads(s)
+        except (ValueError, TypeError):
+            return None
 
 
-_UP = re.compile(r"yüksel|artış|arttı|artıyor|artan|kazan", re.I)
-_DOWN = re.compile(r"düşüş|düştü|düşüyor|azal|kayb|geril", re.I)
-_CAVEAT = re.compile(r"düşük hacim|güvenilir değil|güvenilmez|gürültü|zayıf|ihtiyat", re.I)
-_MISSING = re.compile(r"alınamadı|veri yok|bulunamadı|unavailable|eksik gün|hesaplanmadı|hesaplanamadı|"
-                      r"veri döndürmedi|veri içermiyor", re.I)
-_BUSINESS = re.compile(r"satış\w*|stok\w*|ciro\w*|sipariş\w*|kâr\b|gelir\w*", re.I)
-_ENGLISH = re.compile(r"\b(therefore|unavailable|however|because|increase[sd]?|decrease[sd]?|popularity|"
-                      r"available|insufficient|the|and|with|data)\b", re.I)
-
-
-def _lower_tr(s: str) -> str:
-    return s.replace("I", "ı").replace("İ", "i").lower()
-
-
-def source_aliases(src: str) -> list[str]:
-    """Modelin bir kaynağı yazabileceği biçimler (anahtar, proje adı, Türkçe ad)."""
-    al = {src, src.replace("wikimedia", "wikipedia")}
-    if src.startswith("wikimedia"):
-        if src.endswith("_en"):
-            al |= {"en.wikipedia", "wikipedia.en", "wikipedia_en", "ingilizce vikipedi", "ingilizce wikipedia"}
-        else:
-            al |= {"tr.wikipedia", "wikipedia.tr", "türkçe vikipedi", "türkçe wikipedia"}
-    if src == "gdelt":
-        al |= {"gdelt haberleri"}
-    if src == "google_trends":
-        al |= {"google trends", "google aramaları"}
-    return sorted(al, key=len, reverse=True)
-
-
-def mentioned_sources(line_low: str, sources: list[str]) -> list[str]:
-    """Satırda geçen kaynaklar; uzun adlar önce eşlenir ('wikimedia_en' içindeki 'wikimedia' ayrıca sayılmaz)."""
-    pairs = sorted(((a, s) for s in sources for a in source_aliases(s)), key=lambda x: len(x[0]), reverse=True)
-    found: list[str] = []
-    work = line_low
-    for alias, src in pairs:
-        if alias in work:
-            work = work.replace(alias, " " * len(alias))
-            if src not in found:
-                found.append(src)
-    return found
-
-
-# 4. bölüm başlığı: "## 4.", "**4. ...**", "4) ..." gibi biçimlerin hepsi (model biçimi her zaman korumuyor).
-_SECTION4 = re.compile(r"^\s*(?:#+\s*|\*\*\s*)?4\s*[.)]", re.M)
-
-
-def split_sections(text: str) -> tuple[str, str]:
-    """(1-3. bölümler, 4. bölüm)."""
-    m = _SECTION4.search(text)
-    return (text[:m.start()], text[m.start():]) if m else (text, "")
-
-
-_COMPARE = re.compile(r"daha (yüksek|düşük|fazla|az|çok)", re.I)
-_COMPUTED = {"computed", "baseline_zero"}
-
-
-def check_claims(text: str, rows: list[dict]) -> list[str]:
-    """Modelin iddialarını hesaplanan sonuçlarla karşılaştırır (basit, satır bazlı denetim).
-
-    - 1-3. bölüm: bir terim için artış/düşüş iddiası, o terimin hiçbir kaynağında o yön yoksa;
-      yön yalnızca düşük hacimli seriden geliyor ve çekince yoksa.
-    - 1-3. bölüm: verisi olmayan bir kaynak-terim kanıt olarak gösterilmişse.
-    - Tüm metin: verisi hesaplanmış bir kaynak-terim için 'veri yok / eksik gün' denmişse.
-    - Tüm metin: iki kaynağın değerleri 'daha yüksek/düşük' diye karşılaştırılmışsa.
-    - 1-3. bölüm: satış/stok/ciro gibi veride olmayan metrikler. Tüm metin: İngilizce kelimeler.
-    """
-    issues: list[str] = []
-    labels = sorted({r["label"] for r in rows}, key=len, reverse=True)
-    sources = sorted({r["source"] for r in rows})
-    row = {(r["label"], r["source"]): r for r in rows}
-    body = split_sections(text)[0]
-    body_lines = set(body.splitlines())
-
-    for line in text.splitlines():
-        low = _lower_tr(line)
-        in_body = line in body_lines
-        srcs = mentioned_sources(low, sources)
-        missing_claim = bool(_MISSING.search(line))
-        if len(srcs) >= 2 and _COMPARE.search(line):
-            issues.append(f"Kaynaklar birbiriyle karşılaştırılmış ({', '.join(srcs)}): \"{line.strip()[:90]}\"")
-        for label in labels:
-            if _lower_tr(label) not in low:
-                continue
-            mine = [r for r in rows if r["label"] == label and r.get("direction")]
-            if in_body:
-                for regex, d, word in ((_UP, "up", "artış"), (_DOWN, "down", "düşüş")):
-                    if not regex.search(line):
-                        continue
-                    matching = [r for r in mine if r["direction"] == d]
-                    if not matching:
-                        found = ", ".join(f"{r['source']}: {r['direction']}" for r in mine) or "hesaplanmadı"
-                        issues.append(f"'{label}' için {word} iddiası var ama hesaplanan yön farklı ({found}).")
-                    elif all(r.get("low_volume") for r in matching) and not _CAVEAT.search(line):
-                        issues.append(f"'{label}' için {word} yalnızca düşük hacimli seride var; çekince yok.")
-            for src in srcs:
-                r = row.get((label, src))
-                if r is None:
-                    continue
-                computed = r.get("result") in _COMPUTED
-                if missing_claim and computed:
-                    issues.append(f"'{label}' için {src} verisi hesaplandığı halde 'veri yok/eksik' denmiş.")
-                elif in_body and not missing_claim and not computed:
-                    issues.append(f"'{label}' için {src} verisi yokken kanıt olarak gösterilmiş.")
-
-    biz = sorted({m.group(0).lower() for m in _BUSINESS.finditer(body)})
-    if biz:
-        issues.append(f"1-3. bölümlerde veride olmayan iş metriklerinden söz ediliyor: {', '.join(biz)}")
-
-    eng = sorted({m.group(0).lower() for m in _ENGLISH.finditer(text)})
-    if eng:
-        issues.append(f"Yanıtta İngilizce kelimeler var: {', '.join(eng)}")
-    return list(dict.fromkeys(issues))
-
-
-def check_output(text: str, rows: list[dict]) -> dict:
-    nums = check_numbers(text, rows)
-    claims = check_claims(text, rows)
-    ok = nums["ok"] and not claims
-    return {**nums, "claim_issues": claims, "ok": ok,
-            "note": "Yanıt hesaplanan sonuçlarla tutarlı." if ok else
-                    "Yanıtta hesaplanan sonuçlarla uyuşmayan ifadeler var; aşağıdaki uyarılara bakın."}
+def interpret(rows: list[dict], context: dict, settings: dict, max_attempts: int = 2) -> dict:
+    names = {k: v["display"] for k, v in context["sources"].items()}
+    messages = [{"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_user_prompt(rows, context)}]
+    attempts = []
+    total = 0.0
+    for i in range(max_attempts):
+        out = chat(messages, settings, fmt=RESPONSE_SCHEMA)
+        total += out["elapsed_sec"]
+        data = _parse(out["content"])
+        rev = review(data, rows, names) if data is not None else \
+            {"ok": False, "issues": ["Yanıt geçerli JSON değil."], "structural_issues": ["JSON değil"],
+             "unmatched_percentages": [], "note": "Yanıt geçerli JSON değil."}
+        attempts.append({"attempt": i + 1, "raw": out["content"], "data": data, "review": rev,
+                         "elapsed_sec": out["elapsed_sec"]})
+        log.info("yorum denemesi %d: %d sorun", i + 1, len(rev["issues"]))
+        if rev["ok"]:
+            break
+        if i + 1 < max_attempts:
+            messages = messages + [
+                {"role": "assistant", "content": out["content"]},
+                {"role": "user", "content": "Yanıtında şu sorunlar var:\n" + "\n".join(f"- {x}" for x in rev["issues"])
+                 + "\nKurallara uyarak JSON yanıtını düzeltip yeniden ver."},
+            ]
+    # En iyi deneme: önce geçerli JSON, sonra en az kural (şema/aday) ihlali, sonra en az metin sorunu
+    best = min(attempts, key=lambda a: (a["data"] is None, len(a["review"].get("structural_issues", [])),
+                                        len(a["review"]["issues"])))
+    return {"data": best["data"], "review": best["review"], "chosen_attempt": best["attempt"],
+            "attempts": attempts, "messages": messages, "elapsed_sec": round(total, 2)}
 
 
 def evidence_table(rows: list[dict], names: dict) -> str:
     """Python'un hesapladığı tüm sonuçlar (modelden bağımsız, doğrulama için)."""
-    sig_tr = {"strong_up": "güvenilir artış", "strong_down": "güvenilir düşüş", "flat": "belirgin değişim yok",
-              "weak": "düşük hacim", "insufficient": "hesaplanamadı", "no_data": "veri yok"}
-    from .prompts import _num, _pct, reason_tr
-    out = ["| Terim | Kaynak | Önceki ort. | Yakın ort. | Değişim | Sınıf |", "|---|---|---:|---:|---:|---|"]
-    order = list(sig_tr)
-    for r in sorted(rows, key=lambda r: (order.index(r.get("signal", "no_data")), r["source"], r["label"])):
-        sig = sig_tr.get(r.get("signal"), "-")
+    order = list(TREND_TR)
+    out = ["| Terim | Kaynak | Dönemsel değişim | Yıllık değişim | Etiket |", "|---|---|---:|---:|---|"]
+    for r in sorted(rows, key=lambda r: (order.index(r.get("trend_label", "veri_yok")), r["source"], r["label"])):
+        lab = TREND_TR.get(r.get("trend_label"), "-")
         if r.get("signal") in ("no_data", "insufficient"):
-            sig += f" ({reason_tr(r)})"
-        pct = _pct(r.get("pct_change")) if r.get("baseline_mean") is not None else "-"
-        out.append(f"| {r['label']} | {names.get(r['source'], r['source'])} | {_num(r.get('baseline_mean'))} | "
-                   f"{_num(r.get('recent_mean'))} | {pct} | {sig} |")
+            lab += f" ({reason_tr(r)})"
+        pop = (f"{_num(r.get('baseline_mean'))} → {_num(r.get('recent_mean'))} ({_pct(r.get('pct_change'))})"
+               if r.get("baseline_mean") is not None else "-")
+        yoy = (f"{_num(r.get('yoy_ly_mean'))} → {_num(r.get('yoy_recent_mean'))} ({_pct(r.get('yoy_pct_change'))})"
+               if r.get("yoy_pct_change") is not None else "-")
+        out.append(f"| {r['label']} | {names.get(r['source'], r['source'])} | {pop} | {yoy} | {lab} |")
     return "\n".join(out)
 
 
-def to_markdown(result: dict, meta: dict) -> str:
-    chk = result["check"]
+def render_markdown(result: dict, rows: list[dict], names: dict, meta: dict) -> str:
+    """Raporu Python oluşturur; modelin metinleri ilgili yerlere yerleştirilir."""
+    rev = result["review"]
+    data = result["data"] if isinstance(result.get("data"), dict) else {}
+    w = meta["window"]
+    by_key = {(r["label"].lower(), r["source"]): r for r in rows}
+    alias = {}
+    for key, disp in names.items():
+        alias[key.lower()] = key
+        alias[disp.lower()] = key
     lines = [
-        "# Trend yorumu",
-        "",
-        f"- Model: `{meta['model']}` (Ollama) — sıcaklık {meta['temperature']}",
-        f"- Oluşturma: {meta['created_at']} — süre {result['elapsed_sec']} sn",
-        f"- Çalıştırma: `{meta['run_id']}` — dönem {meta['window']['baseline_start']} → {meta['window']['recent_end']}",
-        f"- Tutarlılık kontrolü: {'✅' if chk['ok'] else '⚠️'} {chk['note']}",
-    ]
-    if chk["unmatched_percentages"]:
-        lines.append(f"  - Hesaplanan sonuçlarda olmayan yüzdeler: "
-                     f"{', '.join(f'%{v:g}' for v in chk['unmatched_percentages'])}")
-    lines += [f"  - {i}" for i in chk.get("claim_issues", [])]
-    lines += [
-        "",
-        "---",
-        "",
-        result["content"].strip(),
+        "# Trend yorumu", "",
+        f"- Model: `{meta['model']}` (Ollama), sıcaklık {meta['temperature']} — {meta['created_at']} — "
+        f"{result['elapsed_sec']} sn, {len(result['attempts'])} deneme (kullanılan: {result['chosen_attempt']})",
+        f"- Çalıştırma: `{meta['run_id']}` — yakın dönem {w['recent_start']} → {w['recent_end']}"
+        + (f", geçen yılın aynı dönemi {w['ly_start']} → {w['ly_end']}" if w.get("ly_start") else ""),
+        f"- Tutarlılık kontrolü: {'✅' if rev['ok'] else '⚠️'} {rev['note']}",
+        *[f"  - {i}" for i in rev["issues"]],
         "",
     ]
-    if result.get("evidence"):
-        lines += ["---", "", "## Ek: Python'un hesapladığı sonuçlar (modelden bağımsız)", "", result["evidence"], ""]
+    if data.get("ozet"):
+        lines += ["## Özet", "", data["ozet"].strip(), ""]
+
+    lines += ["## 1. Öne çıkan terimler", ""]
+    chosen = []
+    for it in data.get("one_cikanlar", []):
+        if not isinstance(it, dict):
+            continue
+        src = alias.get(str(it.get("kaynak", "")).lower(), it.get("kaynak"))
+        r = by_key.get((str(it.get("terim", "")).lower(), src))
+        if not r or r.get("trend_label") not in CANDIDATE_LABELS:
+            continue  # aday olmayan seçim rapora girmez (uyarılarda listelenir)
+        chosen.append(r)
+        lines.append(f"- **{it.get('terim')}** ({names.get(src, it.get('kaynak'))}) — "
+                     f"*{TREND_TR.get(r['trend_label'])}*: {it.get('neden_onemli')}")
+    chosen_terms = {r["label"].lower() for r in chosen}
+    if not chosen:
+        lines.append("- Güvenilir bir değişim gösteren terim yok." if not candidates(rows) else
+                     "- Model öne çıkan terim seçmedi.")
+
+    lines += ["", "## 2. Destekleyen ölçüm ve dönem", "", "*(Sayılar Python tarafından hesaplanmıştır.)*", ""]
+    lines += [evidence_line(r, names) for r in chosen] or ["- Öne çıkan terim olmadığı için kanıt satırı yok."]
+
+    lines += ["", "## 3. Ürün seçimine olası katkı", ""]
+    lines += [f"- **{it.get('terim')}**: {it.get('oneri')}" for it in data.get("urun_katkisi", [])
+              if isinstance(it, dict) and str(it.get("terim", "")).lower() in chosen_terms] or ["- (yok)"]
+
+    lines += ["", "## 4. Bu veriyle söyleyemediklerimiz", ""]
+    lines += [f"- {x}" for x in data.get("soyleyemediklerimiz", []) if isinstance(x, str)] or ["- (model yazmadı)"]
+    lines += ["", "**Sistem notları (Python):**", ""] + [f"- {x}" for x in limitations(rows, names)]
+
+    lines += ["", "---", "", "## Ek: Python'un hesapladığı tüm sonuçlar (modelden bağımsız)", "",
+              evidence_table(rows, names), ""]
     return "\n".join(lines)
-
-
-def dumps(o) -> str:
-    return json.dumps(o, ensure_ascii=False, indent=2)

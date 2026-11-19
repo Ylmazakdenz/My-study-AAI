@@ -1,44 +1,83 @@
-"""Model istemi.
+"""Model istemi ve yanıt şeması.
 
-Küçük modeller (llama3.2 3B) ham JSON'u yanlış okuyabiliyor. İlk iki Colab denemesinde:
-yatay terimlere "yükseliyor" dedi, verisi gelen terimlere "veri alınamadı" dedi, kaynakları birbiriyle karşılaştırdı,
-"satışta artış" uydurdu. Bu yüzden Python sonuçları önce Türkçe, hazır cümlelere ve gruplara çevirir:
-- kanıt satırları (2. bölüm için, kopyalanacak),
-- sınırlar listesi (4. bölüm için),
-model ise öne çıkanları seçer ve ürün seçimine bağlar (1. ve 3. bölüm).
+Tasarım (gerçek denemelerden çıkan ders):
+- Küçük/orta modeller serbest metinde biçimi korumuyor (başlık biçimi değişti, sayıları yanlış aktardı, kaynakları
+  karşılaştırdı, "satış artışı" uydurdu). Bu yüzden model artık JSON şemasına uyan yanıt verir; Python yanıtı
+  alan alan doğrular ve markdown'ı kendisi oluşturur.
+- Model YALNIZCA Python'un aday listesinden terim seçebilir; sayılar ve dönemler Python'dan gelir.
+- Model 4 soruyu yanıtlar: öne çıkanlar + neden (1), ürün katkısı (3), söyleyemediklerimiz (4) ve kısa özet.
+  2. sorunun (ölçüm ve dönem) sayısal kanıtı her seçilen terim için Python tarafından eklenir.
 """
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 
-from .analysis import Signal
+from .analysis import Signal, Trend
 
-SYSTEM_PROMPT = """Sen bir giyim markasının trend analistisin. Sana Python ile hesaplanmış ölçümler, hazır kanıt
-satırları ve sınırlar listesi veriliyor. Görevin bunları marka ekibi için kısa ve doğru biçimde yazmak.
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "ozet": {"type": "string"},
+        "one_cikanlar": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"terim": {"type": "string"}, "kaynak": {"type": "string"},
+                               "neden_onemli": {"type": "string"}},
+                "required": ["terim", "kaynak", "neden_onemli"],
+            },
+        },
+        "urun_katkisi": {
+            "type": "array",
+            "items": {"type": "object", "properties": {"terim": {"type": "string"}, "oneri": {"type": "string"}},
+                      "required": ["terim", "oneri"]},
+        },
+        "soyleyemediklerimiz": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["ozet", "one_cikanlar", "urun_katkisi", "soyleyemediklerimiz"],
+}
+
+SYSTEM_PROMPT = """Sen bir giyim markasının trend analistisin. Sana Python ile hesaplanmış ölçümler ve bir ADAY LİSTESİ
+veriliyor. Yanıtını YALNIZCA verilen JSON şemasına uygun, Türkçe olarak ver.
 
 KURALLAR:
-1. YALNIZCA verilen bilgileri kullan. Yeni sayı, yüzde, tarih veya kaynak uydurma.
-2. "Yükseliş/artış" yalnızca GÜVENİLİR YÜKSELİŞ listesindeki terimler için, "düşüş" yalnızca GÜVENİLİR DÜŞÜŞ
-   listesindekiler için kullanılabilir. Listede olmayan bir terime yükseliş ya da düşüş deme.
-3. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
-4. Kaynakları birbiriyle karşılaştırma ("X kaynağında daha yüksek" gibi). Her kaynak farklı bir şey ölçer.
-5. Tamamen Türkçe yaz; İngilizce kelime kullanma. Kısa ve maddeli yaz.
-
-ÇIKTI BİÇİMİ (tam olarak bu dört başlık):
-## 1. Öne çıkan terimler
-GÜVENİLİR YÜKSELİŞ ve GÜVENİLİR DÜŞÜŞ listelerindeki terimleri yaz (kaynağıyla birlikte). İkisi de boşsa
-"Güvenilir bir değişim gösteren terim yok." yaz.
-## 2. Destekleyen ölçüm ve dönem
-KANIT SATIRLARI'nı aynen kopyala; değiştirme, ekleme yapma.
-## 3. Ürün seçimine olası katkı
-Öne çıkan her terim için 1 madde: bu ilgi hangi ürün tipini öne çıkarmayı veya izlemeyi destekleyebilir.
-İhtiyatlı yaz ("destekleyebilir", "izlenmeli" gibi). Satış veya talep iddiası yapma.
-## 4. Bu veriyle söyleyemediklerimiz
-SINIRLAR listesindeki maddeleri aynen yaz.
+1. "one_cikanlar" içine YALNIZCA ADAY LİSTESİ'ndeki terim-kaynak çiftlerini yaz; terim ve kaynak adlarını listede
+   yazıldığı gibi kopyala. Aday listesi boşsa "one_cikanlar" ve "urun_katkisi" boş liste olsun.
+2. "neden_onemli": adayın ETİKET'ini kendi cümlenle açıkla (ör. sezon üstü artış = son dönemde arttı ve geçen yılın
+   aynı döneminden de yüksek; mevsimsel artış = arttı ama geçen yılla benzer, mevsimin olağan artışı).
+   Yeni sayı yazma; sayı yazacaksan yalnızca aday satırındaki yüzdeleri aynen kullan.
+3. "urun_katkisi": her öne çıkan terim için bir madde. İhtiyatlı yaz ("öne çıkarmayı destekleyebilir",
+   "izlenmeli"). Mevsimsel artışlarda bunun her yıl görülen bir artış olduğunu belirt.
+4. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
+5. Kaynakları birbiriyle sayısal olarak karşılaştırma; her kaynak farklı bir şey ölçer.
+6. "soyleyemediklerimiz": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz.
+7. "ozet": en fazla 2 cümle. Tamamen Türkçe yaz; İngilizce kelime kullanma.
 """
 
-DIRECTION_TR = {"up": "artış", "down": "düşüş", "flat": "belirgin değişim yok"}
+TREND_TR = {
+    Trend.ABOVE_SEASON_UP: "sezon üstü artış",
+    Trend.SEASONAL_UP: "mevsimsel artış (geçen yılla benzer düzey)",
+    Trend.SEASONAL_UP_WEAKER: "mevsimsel artış, geçen yıldan zayıf",
+    Trend.UP_YOY_UNKNOWN: "artış (geçen yılla karşılaştırılamadı)",
+    Trend.ABOVE_SEASON_DOWN: "sezon altı düşüş",
+    Trend.SEASONAL_DOWN: "mevsimsel düşüş (geçen yılla benzer düzey)",
+    Trend.SEASONAL_DOWN_STRONGER: "mevsimsel düşüş, geçen yıldan güçlü",
+    Trend.DOWN_YOY_UNKNOWN: "düşüş (geçen yılla karşılaştırılamadı)",
+    Trend.YEARLY_UP: "geçen yıla göre yüksek (son dönemde sabit)",
+    Trend.YEARLY_DOWN: "geçen yıla göre düşük (son dönemde sabit)",
+    Trend.NO_CHANGE: "belirgin değişim yok",
+    Trend.WEAK: "düşük hacim — güvenilir değil",
+    Trend.INSUFFICIENT: "hesaplanamadı",
+    Trend.NO_DATA: "veri yok",
+}
+
+# Öne çıkan sayılabilecek etiketler (en az bir karşılaştırmada güvenilir sinyal)
+_LABEL_ORDER = [Trend.ABOVE_SEASON_UP, Trend.YEARLY_UP, Trend.UP_YOY_UNKNOWN, Trend.SEASONAL_UP,
+                Trend.SEASONAL_UP_WEAKER, Trend.ABOVE_SEASON_DOWN, Trend.YEARLY_DOWN, Trend.DOWN_YOY_UNKNOWN,
+                Trend.SEASONAL_DOWN, Trend.SEASONAL_DOWN_STRONGER]
+CANDIDATE_LABELS = set(_LABEL_ORDER)
 
 
 def display_name(key: str, info: dict | None = None) -> str:
@@ -48,7 +87,10 @@ def display_name(key: str, info: dict | None = None) -> str:
     if typ == "wikimedia":
         lang = str(s.get("project", "en.wikipedia" if key.endswith("_en") else "tr.wikipedia")).split(".")[0]
         return {"tr": "Türkçe Vikipedi", "en": "İngilizce Vikipedi"}.get(lang, f"Vikipedi ({lang})")
-    return {"gdelt": "GDELT haberleri", "google_trends": "Google Trends"}.get(typ, key)
+    if typ == "google_trends":
+        geo = s.get("geo", "TR")
+        return "Google Trends" if geo == "TR" else f"Google Trends ({geo})"
+    return {"gdelt": "GDELT haberleri"}.get(typ, key)
 
 
 def reason_tr(row: dict) -> str:
@@ -79,7 +121,7 @@ def _num(v: float | None) -> str:
 
 
 def _pct(v: float | None) -> str:
-    return "yüzde tanımsız" if v is None else f"%{v:+.1f}".replace(".", ",")
+    return "-" if v is None else f"%{v:+.1f}".replace(".", ",")
 
 
 def _d(s: str) -> str:
@@ -87,10 +129,33 @@ def _d(s: str) -> str:
     return f"{d}.{m}.{y}"
 
 
+def candidates(rows: list[dict]) -> list[dict]:
+    """Modelin seçebileceği terim-kaynak çiftleri (Python belirler)."""
+    c = [r for r in rows if r.get("trend_label") in CANDIDATE_LABELS]
+    return sorted(c, key=lambda r: (_LABEL_ORDER.index(r["trend_label"]), -abs(r.get("pct_change") or 0)))
+
+
 def evidence_line(r: dict, names: dict) -> str:
-    return (f"- {r['label']} — {names.get(r['source'], r['source'])}: günlük ortalama {_num(r['baseline_mean'])} "
-            f"({_d(r['baseline_start'])}–{_d(r['baseline_end'])}) → {_num(r['recent_mean'])} "
-            f"({_d(r['recent_start'])}–{_d(r['recent_end'])}), değişim {_pct(r.get('pct_change'))}")
+    """2. soru (ölçüm ve dönem) için Python'un ürettiği kanıt satırı."""
+    nm = names.get(r["source"], r["source"])
+    parts = [f"**{r['label']} — {nm}**: {TREND_TR.get(r.get('trend_label'), '-')}."]
+    if r.get("baseline_mean") is not None:
+        parts.append(f"Dönemsel: günlük ortalama {_num(r['baseline_mean'])} ({_d(r['baseline_start'])}–"
+                     f"{_d(r['baseline_end'])}) → {_num(r['recent_mean'])} ({_d(r['recent_start'])}–"
+                     f"{_d(r['recent_end'])}), {_pct(r.get('pct_change'))}.")
+    if r.get("yoy_pct_change") is not None:
+        parts.append(f"Yıllık: geçen yıl aynı dönem ({_d(r['ly_start'])}–{_d(r['ly_end'])}) "
+                     f"{_num(r['yoy_ly_mean'])} → bu yıl {_num(r['yoy_recent_mean'])}, {_pct(r['yoy_pct_change'])} "
+                     f"({r.get('yoy_granularity')} veri).")
+    else:
+        parts.append("Yıllık karşılaştırma yapılamadı.")
+    return "- " + " ".join(parts)
+
+
+def candidate_line(r: dict, names: dict) -> str:
+    y = f", yıllık {_pct(r['yoy_pct_change'])}" if r.get("yoy_pct_change") is not None else ""
+    return (f"- terim: {r['label']} | kaynak: {names.get(r['source'], r['source'])} | "
+            f"ETİKET: {TREND_TR[r['trend_label']]} | dönemsel {_pct(r.get('pct_change'))}{y}")
 
 
 def limitations(rows: list[dict], names: dict) -> list[str]:
@@ -104,27 +169,31 @@ def limitations(rows: list[dict], names: dict) -> list[str]:
         if weak:
             means = [m for r in weak for m in (r.get("baseline_mean"), r.get("recent_mean")) if m is not None]
             rng = f" (günlük ortalama {_num(min(means))}–{_num(max(means))})" if means else ""
-            out.append(f"- {nm}: {', '.join(r['label'] for r in weak)} için hacim çok düşük{rng}; "
+            out.append(f"{nm}: {', '.join(r['label'] for r in weak)} için hacim çok düşük{rng}; "
                        "değişimler güvenilir değil.")
         reasons: dict[str, list[str]] = defaultdict(list)
         for r in rs:
             if r.get("signal") in (Signal.NO_DATA, Signal.INSUFFICIENT):
                 reasons[reason_tr(r)].append(r["label"])
         for reason, labels in reasons.items():
-            out.append(f"- {nm}: {', '.join(labels)} — {reason}.")
+            out.append(f"{nm}: {', '.join(labels)} — {reason}.")
+        no_yoy = [r["label"] for r in rs if r.get("signal") not in (Signal.NO_DATA, Signal.INSUFFICIENT, Signal.WEAK)
+                  and r.get("yoy_result") != "computed"]
+        if no_yoy:
+            out.append(f"{nm}: {', '.join(no_yoy)} için geçen yılla karşılaştırma yapılamadı; bu terimlerde "
+                       "değişimin mevsimsel olup olmadığı bilinmiyor.")
         gaps = max((r.get("source_gap_days") or 0) for r in rs)
         if gaps:
-            out.append(f"- {nm}: kaynağın kendisinde {gaps} günlük veri kesintisi var; bu günler hesaba katılmadı.")
-    if any(k == "google_trends" or v == "Google Trends" for k, v in names.items()):
-        out.append("- Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir; yalnızca "
-                   "aynı terimin iki dönemi karşılaştırılabilir, terimler birbiriyle kıyaslanamaz. Google aramaların "
-                   "bir örneklemini kullandığı için aynı sorgu tekrarlandığında değerler biraz değişebilir.")
-    if any(k.endswith("_en") or "İngilizce" in v for k, v in names.items()):
-        out.append("- İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.")
-    out.append("- Veriler bilgi merakı ve haber görünürlüğünü ölçer; satış, stok, fiyat veya tüketici talebi "
-               "hakkında bilgi içermez.")
-    out.append("- Sonuçlar tek bir dönem karşılaştırmasına dayanır; mevsimsellik veya uzun vadeli eğilim ayrıca "
-               "incelenmedi.")
+            out.append(f"{nm}: kaynağın kendisinde {gaps} günlük veri kesintisi var; bu günler hesaba katılmadı.")
+    if "google_trends" in names:
+        out.append("Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir; yalnızca "
+                   "aynı terimin dönemleri karşılaştırılabilir. Google aramaların bir örneklemini kullandığı için "
+                   "aynı sorgu tekrarlandığında değerler biraz değişebilir.")
+    if any(k.endswith("_en") for k in names):
+        out.append("İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.")
+    out.append("Veriler arama ilgisi ve bilgi merakını ölçer; satış, stok, fiyat veya tüketici talebi hakkında "
+               "bilgi içermez.")
+    out.append("Yıllık karşılaştırma tek bir önceki yıla dayanır; uzun vadeli eğilim için daha fazla yıl gerekir.")
     return out
 
 
@@ -132,39 +201,33 @@ def build_user_prompt(rows: list[dict], context: dict) -> str:
     """context: brand, window, sources (anahtar -> {display, description}), flat_threshold_pct."""
     w = context["window"]
     thr = context.get("flat_threshold_pct", 15)
-    srcs = context["sources"]
-    names = {k: v["display"] for k, v in srcs.items()}
-    up = sorted([r for r in rows if r.get("signal") == Signal.STRONG_UP], key=lambda r: -r["pct_change"])
-    down = sorted([r for r in rows if r.get("signal") == Signal.STRONG_DOWN], key=lambda r: r["pct_change"])
-    flat = [r for r in rows if r.get("signal") == Signal.FLAT]
-
-    def term_list(rs):
-        return "\n".join(f"- {r['label']} ({names.get(r['source'], r['source'])}, {_pct(r['pct_change'])})"
-                         for r in rs) or "- (yok)"
-
+    names = {k: v["display"] for k, v in context["sources"].items()}
+    cands = candidates(rows)
+    other = [r for r in rows if r not in cands]
+    ly = f" | Geçen yılın aynı dönemi: {_d(w['ly_start'])}–{_d(w['ly_end'])}" if w.get("ly_start") else ""
     parts = [
         f"Marka: {context['brand'].get('name')} | Pazar: {context['brand'].get('market')} | "
         f"Sezon: {context['brand'].get('season')}",
         f"Önceki dönem: {_d(w['baseline_start'])}–{_d(w['baseline_end'])} | "
-        f"Yakın dönem: {_d(w['recent_start'])}–{_d(w['recent_end'])}",
-        f"Yöntem: yakın dönem günlük ortalaması önceki dönemle karşılaştırıldı; ±%{thr:g} içindeki değişimler "
-        "'belirgin değişim yok' sayıldı; düşük hacimli seriler güvenilir sayılmadı.",
+        f"Yakın dönem: {_d(w['recent_start'])}–{_d(w['recent_end'])}{ly}",
+        "Yöntem: dönemsel = yakın dönem ↔ önceki dönem; yıllık = yakın dönem ↔ geçen yılın aynı dönemi. "
+        f"±%{thr:g} içindeki değişimler 'belirgin değişim yok' sayıldı; düşük hacimli seriler güvenilir sayılmadı.",
         "",
         "KAYNAKLAR:",
-        *[f"- {v['display']}: {v['description']}" for v in srcs.values()],
+        *[f"- {v['display']}: {v['description']}" for v in context["sources"].values()],
         "",
-        "GÜVENİLİR YÜKSELİŞ:", term_list(up),
+        "ADAY LİSTESİ (one_cikanlar yalnızca bunlardan seçilir):",
+        "\n".join(candidate_line(r, names) for r in cands) or "- (aday yok)",
         "",
-        "GÜVENİLİR DÜŞÜŞ:", term_list(down),
+        "ADAY OLMAYANLAR (öne çıkan sayılmaz):",
+        "\n".join(f"- {r['label']} | {names.get(r['source'], r['source'])} | "
+                  f"{TREND_TR.get(r.get('trend_label'), '-')}" for r in other) or "- (yok)",
         "",
-        "BELİRGİN DEĞİŞİM YOK:", term_list(flat),
-        "",
-        "KANIT SATIRLARI (2. bölüme aynen kopyala):",
-        "\n".join(evidence_line(r, names) for r in up + down) or "- Güvenilir değişim gösteren ölçüm yok.",
-        "",
-        "SINIRLAR (4. bölüme aynen kopyala):",
-        "\n".join(limitations(rows, names)),
-        "",
-        "Dört başlığı Türkçe yaz.",
+        "SINIRLAR:",
+        "\n".join(f"- {x}" for x in limitations(rows, names)),
     ]
     return "\n".join(parts)
+
+
+def schema_json() -> str:
+    return json.dumps(RESPONSE_SCHEMA, ensure_ascii=False)

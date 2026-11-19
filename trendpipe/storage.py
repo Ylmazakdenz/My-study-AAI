@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .models import FetchResult, Point
 
-TS_FIELDS = ["source", "metric", "term_id", "label", "category", "query", "date", "value", "extra"]
+TS_FIELDS = ["source", "series", "metric", "term_id", "label", "category", "query", "date", "value", "extra"]
 
 
 def new_run_dir(base: str | Path) -> Path:
@@ -47,7 +47,8 @@ def resolve_run_dir(run: str, base: str | Path = "data/runs") -> Path:
 def save_raw(run_dir: Path, res: FetchResult) -> str | None:
     if res.raw_body is None:
         return None
-    rel = f"raw/{res.source}__{res.term_id}.{res.raw_ext}"
+    suffix = "" if res.series == "main" else f"__{res.series}"
+    rel = f"raw/{res.source}__{res.term_id}{suffix}.{res.raw_ext}"
     (run_dir / rel).write_text(res.raw_body, encoding="utf-8")
     return rel
 
@@ -68,22 +69,22 @@ def write_timeseries(run_dir: Path, results: list[FetchResult], terms_by_id: dic
         for res in results:
             t = terms_by_id[res.term_id]
             for p in res.points:
-                w.writerow({"source": res.source, "metric": res.metric, "term_id": res.term_id,
+                w.writerow({"source": res.source, "series": res.series, "metric": res.metric, "term_id": res.term_id,
                             "label": t.label, "category": t.category, "query": res.query,
                             "date": p.day.isoformat(), "value": p.value,
                             "extra": json.dumps(p.extra, ensure_ascii=False) if p.extra else ""})
     return path
 
 
-def read_timeseries(run_dir: Path) -> dict[tuple[str, str], list[Point]]:
-    """(kaynak, terim_id) -> günlük noktalar."""
+def read_timeseries(run_dir: Path) -> dict[tuple[str, str, str], list[Point]]:
+    """(kaynak, terim_id, seri) -> noktalar. Eski kayıtlarda 'series' sütunu yoksa 'main' kabul edilir."""
     out: dict[tuple[str, str], list[Point]] = {}
     path = run_dir / "processed" / "timeseries.csv"
     if not path.exists():
         return out
     with path.open(encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            key = (row["source"], row["term_id"])
+            key = (row["source"], row["term_id"], row.get("series") or "main")
             out.setdefault(key, []).append(
                 Point(date.fromisoformat(row["date"]), float(row["value"]),
                       json.loads(row["extra"]) if row.get("extra") else None))

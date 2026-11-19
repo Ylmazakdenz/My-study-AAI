@@ -1,4 +1,10 @@
-"""Değişim hesabı: yakın dönem ortalaması ile hemen önceki dönem ortalamasının karşılaştırılması.
+"""Değişim hesabı.
+
+İki karşılaştırma yapılır:
+1. Dönemsel: yakın dönem (son 28 gün) ortalaması ↔ hemen önceki 28 gün (ana seri, günlük).
+2. Yıllık: yakın dönem ↔ geçen yılın aynı dönemi (52 hafta önce; uzun seri). Giyimde ilgi mevsimle değişir
+   (palto her Kasım artar); yıllık karşılaştırma mevsimsel artışı gerçek değişimden ayırır.
+İkisi birleştirilerek `trend_label` üretilir (ör. sezon üstü artış / mevsimsel artış).
 
 Kurallar:
 - Hesapları Python yapar; model yalnızca bu sonuçları yorumlar.
@@ -19,7 +25,10 @@ ANALYSIS_FIELDS = [
     "baseline_start", "baseline_end", "recent_start", "recent_end",
     "baseline_days_present", "recent_days_present", "source_gap_days", "baseline_coverage", "recent_coverage",
     "baseline_mean", "recent_mean", "abs_change", "pct_change", "recent_slope_per_day",
-    "direction", "low_volume", "signal", "rank_in_source", "notes",
+    "direction", "low_volume", "signal",
+    "ly_start", "ly_end", "yoy_result", "yoy_granularity", "yoy_ly_points", "yoy_recent_points",
+    "yoy_ly_mean", "yoy_recent_mean", "yoy_pct_change", "yoy_direction", "yoy_low_volume", "yoy_signal",
+    "trend_label", "rank_in_source", "notes",
 ]
 
 
@@ -45,11 +54,47 @@ def classify(row: dict) -> str:
     return {"up": Signal.STRONG_UP, "down": Signal.STRONG_DOWN}.get(row.get("direction"), Signal.FLAT)
 
 
+class Trend:
+    """Dönemsel + yıllık karşılaştırmanın birleşimi (yorum etiketi)."""
+
+    ABOVE_SEASON_UP = "sezon_ustu_artis"          # son 4 haftada arttı VE geçen yılın aynı döneminden yüksek
+    SEASONAL_UP = "mevsimsel_artis"               # arttı ama geçen yılla benzer düzeyde -> mevsimin olağan artışı
+    SEASONAL_UP_WEAKER = "mevsimsel_artis_gecen_yildan_zayif"
+    UP_YOY_UNKNOWN = "artis_yillik_bilinmiyor"
+    ABOVE_SEASON_DOWN = "sezon_alti_dusus"        # düştü VE geçen yılın aynı döneminden düşük
+    SEASONAL_DOWN = "mevsimsel_dusus"
+    SEASONAL_DOWN_STRONGER = "mevsimsel_dusus_gecen_yildan_guclu"
+    DOWN_YOY_UNKNOWN = "dusus_yillik_bilinmiyor"
+    YEARLY_UP = "yillik_artis"                    # son dönemde sabit ama geçen yıldan yüksek
+    YEARLY_DOWN = "yillik_dusus"
+    NO_CHANGE = "degisim_yok"
+    WEAK = "dusuk_hacim"
+    INSUFFICIENT = "hesaplanamadi"
+    NO_DATA = "veri_yok"
+
+
+def trend_label(pop: str, yoy: str | None) -> str:
+    if pop == Signal.WEAK:
+        return Trend.WEAK
+    if pop == Signal.INSUFFICIENT:
+        return Trend.INSUFFICIENT
+    if pop == Signal.NO_DATA:
+        return Trend.NO_DATA
+    if pop == Signal.STRONG_UP:
+        return {Signal.STRONG_UP: Trend.ABOVE_SEASON_UP, Signal.FLAT: Trend.SEASONAL_UP,
+                Signal.STRONG_DOWN: Trend.SEASONAL_UP_WEAKER}.get(yoy, Trend.UP_YOY_UNKNOWN)
+    if pop == Signal.STRONG_DOWN:
+        return {Signal.STRONG_DOWN: Trend.ABOVE_SEASON_DOWN, Signal.FLAT: Trend.SEASONAL_DOWN,
+                Signal.STRONG_UP: Trend.SEASONAL_DOWN_STRONGER}.get(yoy, Trend.DOWN_YOY_UNKNOWN)
+    return {Signal.STRONG_UP: Trend.YEARLY_UP, Signal.STRONG_DOWN: Trend.YEARLY_DOWN}.get(yoy, Trend.NO_CHANGE)
+
+
 class Result:
     COMPUTED = "computed"
     INSUFFICIENT = "insufficient_data"
     BASELINE_ZERO = "baseline_zero"
     NO_DATA = "no_data"
+    NOT_FETCHED = "not_fetched"
 
 
 def _days(a: date, b: date) -> list[date]:
@@ -174,53 +219,151 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
     return out
 
 
+def granularity(points: list[Point]) -> int:
+    """Serinin adımı (gün): 1 = günlük, 7 = haftalık (Google Trends uzun dönemde haftalık döndürür)."""
+    days = sorted(p.day for p in points)
+    if len(days) < 2:
+        return 1
+    gaps = sorted((b - a).days for a, b in zip(days, days[1:], strict=False))
+    return 7 if gaps[len(gaps) // 2] >= 6 else 1
+
+
+def _expected_points(start: date, end: date, step: int, anchor: date) -> list[date]:
+    """Pencereye TAMAMEN düşen beklenen nokta tarihleri (haftalıkta: haftanın 7 günü de pencere içinde)."""
+    if step == 1:
+        return _days(start, end)
+    first = anchor + timedelta(days=((start - anchor).days + step - 1) // step * step)
+    out, d = [], first
+    while d + timedelta(days=step - 1) <= end:
+        out.append(d)
+        d += timedelta(days=step)
+    return out
+
+
+def analyze_yoy(points: list[Point], window: Window, *, min_coverage: float = 0.8,
+                flat_threshold_pct: float = 15.0, low_volume: float | None = None) -> dict:
+    """Yakın dönem ↔ geçen yılın aynı dönemi. İki dönem de AYNI seriden (aynı istekten) alınır; Google Trends'te
+    ölçekleme istek başına yapıldığı için bu şarttır."""
+    out = {"yoy_result": None, "yoy_granularity": None, "yoy_ly_points": 0, "yoy_recent_points": 0,
+           "yoy_ly_mean": None, "yoy_recent_mean": None, "yoy_pct_change": None, "yoy_direction": None,
+           "yoy_low_volume": None, "yoy_notes": []}
+    if not window.has_yoy or not points:
+        out["yoy_result"] = Result.NO_DATA
+        return out
+    step = granularity(points)
+    out["yoy_granularity"] = "haftalık" if step == 7 else "günlük"
+    by_day = {p.day: p.value for p in points}
+    raw = {p.day: (p.extra or {}).get("raw", p.value) for p in points}
+    anchor = min(by_day)
+    exp_ly = _expected_points(window.ly_start, window.ly_end, step, anchor)
+    exp_rec = _expected_points(window.recent_start, window.recent_end, step, anchor)
+    ly = [d for d in exp_ly if d in by_day]
+    rec = [d for d in exp_rec if d in by_day]
+    out["yoy_ly_points"], out["yoy_recent_points"] = len(ly), len(rec)
+    if not exp_ly or not exp_rec or len(ly) < max(1, min_coverage * len(exp_ly)) or \
+            len(rec) < max(1, min_coverage * len(exp_rec)):
+        out["yoy_result"] = Result.INSUFFICIENT
+        out["yoy_notes"].append(f"Yıllık karşılaştırma için yeterli nokta yok (geçen yıl {len(ly)}/{len(exp_ly)}, "
+                                f"bu yıl {len(rec)}/{len(exp_rec)}).")
+        return out
+    lm, rm = mean(by_day[d] for d in ly), mean(by_day[d] for d in rec)
+    out["yoy_ly_mean"], out["yoy_recent_mean"] = round(lm, 3), round(rm, 3)
+    out["yoy_low_volume"] = bool(low_volume is not None and mean(raw[d] for d in ly) < low_volume
+                                 and mean(raw[d] for d in rec) < low_volume)
+    if lm == 0:
+        out["yoy_result"] = Result.BASELINE_ZERO
+        return out
+    pct = (rm - lm) / lm * 100
+    out["yoy_pct_change"] = round(pct, 1)
+    out["yoy_direction"] = "up" if pct >= flat_threshold_pct else "down" if pct <= -flat_threshold_pct else "flat"
+    out["yoy_result"] = Result.COMPUTED
+    return out
+
+
+def classify_yoy(y: dict) -> str:
+    return classify({"result": y["yoy_result"], "low_volume": y.get("yoy_low_volume"),
+                     "direction": y.get("yoy_direction")})
+
+
+def _prepare_series(manifest: dict, series: dict, a: dict, kind: str, window: Window
+                    ) -> tuple[dict, dict, dict, dict]:
+    """Seri ön işleme (kaynak bazında): Google 0 → eksik, GDELT oranlama, kaynak kesinti günleri."""
+    norm_sources = set(a.get("normalize_by_norm") or [])
+    zero_missing = set(a.get("zero_is_missing") or [])
+    out = dict(series)
+    gaps: dict[str, set[date]] = {}
+    normalized: dict[str, int] = {}
+    zeros: dict[tuple[str, str], int] = {}
+    recs = [r for r in manifest["fetches"] if r.get("series", "main") == kind]
+    for src in {r["source"] for r in recs}:
+        ok_ids = [r["term_id"] for r in recs if r["source"] == src and r["status"] == FetchStatus.OK]
+        if src in zero_missing:
+            for t in ok_ids:
+                pts = out.get((src, t, kind), [])
+                kept = [p for p in pts if p.value != 0]
+                zeros[(src, t)] = len(pts) - len(kept)
+                out[(src, t, kind)] = kept
+        if src in norm_sources and ok_ids:
+            new, dropped = normalize_by_norm([out.get((src, t, kind), []) for t in ok_ids],
+                                             float(a.get("min_norm_ratio", 0.2)))
+            out.update({(src, t, kind): pts for t, pts in zip(ok_ids, new, strict=True)})
+            normalized[src] = dropped
+        if kind == "main":
+            gaps[src] = source_gap_days([out.get((src, t, kind), []) for t in ok_ids], window)
+    return out, gaps, normalized, zeros
+
+
 def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list[dict]:
     a = cfg.get("analysis") or {}
     low = a.get("low_volume") or {}
+    min_cov = float(a.get("min_coverage", 0.8))
+    thr = float(a.get("flat_threshold_pct", 15))
+    series, gaps, normalized, zeros = _prepare_series(manifest, series, a, "main", window)
+    series, _, _, yoy_zeros = _prepare_series(manifest, series, a, "yoy", window)
+    yoy_recs = {(r["source"], r["term_id"]): r for r in manifest["fetches"] if r.get("series") == "yoy"}
+
     rows = []
-    gaps: dict[str, set[date]] = {}
-    norm_sources = set(a.get("normalize_by_norm") or [])
-    zero_missing = set(a.get("zero_is_missing") or [])
-    series = dict(series)
-    normalized: dict[str, int] = {}
-    zeros_dropped: dict[tuple[str, str], int] = {}
-    for src in {r["source"] for r in manifest["fetches"]}:
-        ok_ids = [r["term_id"] for r in manifest["fetches"] if r["source"] == src and r["status"] == FetchStatus.OK]
-        if src in zero_missing:
-            # Google Trends: 0 = "bu terim için yeterli veri yok" -> eksik gün, sıfır değil.
-            for t in ok_ids:
-                pts = series.get((src, t), [])
-                kept = [p for p in pts if p.value != 0]
-                zeros_dropped[(src, t)] = len(pts) - len(kept)
-                series[(src, t)] = kept
-        if src in norm_sources and ok_ids:
-            new, dropped = normalize_by_norm([series.get((src, t), []) for t in ok_ids],
-                                             float(a.get("min_norm_ratio", 0.2)))
-            series.update({(src, t): pts for t, pts in zip(ok_ids, new)})
-            normalized[src] = dropped
-        gaps[src] = source_gap_days([series.get((src, t), []) for t in ok_ids], window)
     for rec in manifest["fetches"]:
+        if rec.get("series", "main") != "main":
+            continue
+        src, tid = rec["source"], rec["term_id"]
         base = {k: rec.get(k) for k in ("source", "metric", "term_id", "label", "category", "query")}
         base["fetch_status"] = rec["status"]
         if rec["status"] != FetchStatus.OK:
-            rows.append({**base, **window.as_dict(), "result": Result.NO_DATA,
-                         "notes": [f"Veri alınamadı ({rec['status']}): {rec.get('error') or '-'}"]})
-            continue
-        stats = analyze_series(series.get((rec["source"], rec["term_id"]), []), window,
-                               min_coverage=float(a.get("min_coverage", 0.8)),
-                               flat_threshold_pct=float(a.get("flat_threshold_pct", 15)),
-                               low_volume=low.get(rec["source"]), gap_days=gaps.get(rec["source"]),
-                               min_window_days_ratio=float(a.get("min_window_days_ratio", 0.5)))
-        if zeros_dropped.get((rec["source"], rec["term_id"])):
-            stats["notes"].insert(0, f"{zeros_dropped[(rec['source'], rec['term_id'])]} gün 0 değeri (kaynağa göre "
-                                     "'yeterli veri yok') eksik sayıldı, sıfır olarak hesaba katılmadı.")
-        if rec["source"] in normalized:
-            stats["metric"] = "articles_per_10k_monitored"
-            stats["notes"].insert(0, f"Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme hacmi "
-                                     f"çok düşük {normalized[rec['source']]} gün bozuk sayılıp çıkarıldı.")
-        rows.append({**base, **stats})
+            stats = {**window.as_dict(), "result": Result.NO_DATA,
+                     "notes": [f"Veri alınamadı ({rec['status']}): {rec.get('error') or '-'}"]}
+        else:
+            stats = analyze_series(series.get((src, tid, "main"), []), window, min_coverage=min_cov,
+                                   flat_threshold_pct=thr, low_volume=low.get(src), gap_days=gaps.get(src),
+                                   min_window_days_ratio=float(a.get("min_window_days_ratio", 0.5)))
+            if zeros.get((src, tid)):
+                stats["notes"].insert(0, f"{zeros[(src, tid)]} gün 0 değeri (kaynağa göre 'yeterli veri yok') "
+                                         "eksik sayıldı, sıfır olarak hesaba katılmadı.")
+            if src in normalized:
+                stats["metric"] = "articles_per_10k_monitored"
+                stats["notes"].insert(0, f"Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme "
+                                         f"hacmi çok düşük {normalized[src]} gün bozuk sayılıp çıkarıldı.")
+
+        # Yıllık karşılaştırma
+        yrec = yoy_recs.get((src, tid))
+        if yrec is None:
+            y = {"yoy_result": Result.NOT_FETCHED, "yoy_notes": ["Yıllık seri çekilmedi (eski kayıt ya da kapalı)."]}
+        elif yrec["status"] != FetchStatus.OK:
+            y = {"yoy_result": Result.NO_DATA,
+                 "yoy_notes": [f"Yıllık seri alınamadı ({yrec['status']}): {yrec.get('error') or '-'}"]}
+        else:
+            y = analyze_yoy(series.get((src, tid, "yoy"), []), window, min_coverage=min_cov,
+                            flat_threshold_pct=thr, low_volume=low.get(src))
+            if yoy_zeros.get((src, tid)):
+                y["yoy_notes"].insert(0, f"Yıllık seride {yoy_zeros[(src, tid)]} nokta 0 (yeterli veri yok), "
+                                         "eksik sayıldı.")
+        notes = stats.pop("notes", []) + y.pop("yoy_notes", [])
+        rows.append({**base, **stats, **y, "notes": notes})
+
     for r in rows:
         r["signal"] = classify(r)
+        r["yoy_signal"] = classify_yoy(r) if r.get("yoy_result") not in (None, Result.NOT_FETCHED) else None
+        r["trend_label"] = trend_label(r["signal"], r["yoy_signal"])
 
     # Sıralama yalnızca aynı kaynak içinde ve hesaplanabilen yüzde değişimlere göre yapılır.
     for src in {r["source"] for r in rows}:

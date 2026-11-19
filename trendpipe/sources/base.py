@@ -16,7 +16,10 @@ from datetime import date, datetime, timezone
 
 import requests
 
+from ..logs import get_logger
 from ..models import FetchResult, FetchStatus
+
+log = get_logger("sources")
 
 # Geçici olabilecek durumlar: tekrar denemeye değer.
 RETRY_HTTP = {429, 500, 502, 503, 504}
@@ -79,13 +82,18 @@ class Source(ABC):
             try:
                 r = self.session.get(url, params=params, timeout=self.timeout,
                                      headers={"User-Agent": self.user_agent, "Accept": "application/json"})
-            except (requests.Timeout, requests.ConnectionError):
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                log.info("%s deneme %d/%d: %s", self.name, attempt + 1, self.max_retries + 1, type(exc).__name__)
                 if last:
                     raise
             else:
+                log.info("%s deneme %d/%d: HTTP %s %s", self.name, attempt + 1, self.max_retries + 1,
+                         r.status_code, getattr(r, "url", url))
                 if r.status_code not in RETRY_HTTP or last:
                     return r
-            time.sleep(max(self.retry_backoff * (attempt + 1), _retry_after(r)))
+            wait = max(self.retry_backoff * (attempt + 1), _retry_after(r))
+            log.info("%s: %.0f sn beklenip tekrar denenecek", self.name, wait)
+            time.sleep(wait)
         raise RuntimeError("ulaşılamaz")  # pragma: no cover
 
 

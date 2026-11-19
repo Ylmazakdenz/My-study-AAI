@@ -1,0 +1,70 @@
+# Karar kaydı
+
+Her karar, onu doğuran gerçek çalıştırma ya da bulguyla birlikte yazılmıştır. Tarihler 2026.
+
+## K1 — Model bağlantısı: hocanın yöntemi, yerel çalıştırma (19.11)
+
+- **Bağlam:** Hocanın notebook'u Ollama'yı Colab'da (T4 GPU) kurup `ollama` Python paketiyle `localhost:11434`'e
+  bağlanıyor.
+- **Karar:** Aynı yöntem (`ollama` paketi + Ollama sunucusu) korunur; ana çalıştırma yeri **yerel bilgisayar**dır
+  (Ollama Mac uygulaması). Colab notebook'u yedek yol olarak durur. Adres ve model `.env`'den okunur.
+- **Gerekçe:** Google Trends yalnızca ev internetinden çalıştı (K4); ekip üyeleri yerelde çalışıyor; 16 GB
+  M4 Mac `llama3.1:8b` için yeterli.
+- **Kurulum notu:** Colab'da güncel Ollama kurulum betiği `zstd` istiyor (18.11, hocanın koduna eklendi).
+
+## K2 — Model: `llama3.1:8b` (18.11)
+
+- **Bulgu:** Hocanın notebook'undaki `llama3.2` (3B) iki denemede de yorumda hata yaptı: belirgin değişimi olmayan
+  terimlere "popülerlik kazanıyor", verisi olan terimlere "veri alınamadı" dedi; "satışta artış" uydurdu; Türkçe ile
+  İngilizceyi karıştırdı.
+- **Karar:** `llama3.1:8b`. Hocanın notebook'u T4 için iki modeli de öneriyor ("Llama 3.2 (3B) or Llama 3.1 (8B)").
+  İlk 8B denemesinde tutarlılık kontrolü ✅.
+
+## K3 — Model çıktısı: serbest metin yerine JSON şeması (19.11)
+
+- **Bulgu:** 8B model bile serbest metinde biçimi korumadı (başlıkları `## 4.` yerine `**4.**` yazdı); denetim
+  regex'e dayandığı için yanlış alarm verdi.
+- **Karar:** Model, Ollama `format` parametresiyle JSON şemasına uyan yanıt verir; Python alan alan doğrular,
+  sorun varsa geri bildirimle bir kez daha sorar ve raporu kendisi oluşturur. Sonraki aşamada ajanlar arası veri
+  aktarımı da bu biçimde olacak.
+
+## K4 — Ana kaynak: Google Trends (19.11)
+
+- **Bulgu:** Türkçe Vikipedi'de giyim makaleleri günde 1,5–8 görüntüleme alıyor (güvenilir değil); İngilizce
+  Vikipedi dünya genelini ölçüyor. Google Trends ev internetinden 6/6 terim, 56/56 gün.
+- **Karar:** Google Trends (Türkiye) ana kaynak; Vikipedi (tr + en) yedek/doğrulama.
+- **Risk:** pytrends resmi değil; engellenirse hata kaydedilir, hat Vikipedi ile sürer. Kalıcı çözüm: resmi Trends
+  API alfa başvurusu.
+- **Etkisi:** Hırka İngilizce Vikipedi'de +%25,7 iken Türkiye aramalarında -%9,8 çıktı; Google Trends olmasaydı
+  Türkiye için yanlış ürün önerilebilirdi.
+
+## K5 — GDELT kapalı (19.11)
+
+4 gerçek çalıştırmanın hiçbirinde karşılaştırılabilir veri alınamadı: zaman aşımı, tekrarlayan 429 (Colab ve ev
+interneti), GDELT'in kendi veri kesintisi (tüm terimlerde aynı 17 gün) ve izleme hacminin yarıya düşmesi (ham
+sayılar yapay olarak %35–75 "düşüyordu"). Kod duruyor; `--sources gdelt` ile denenebilir. Ayrıntı:
+[kaynaklar.md](kaynaklar.md).
+
+## K6 — Eksik veri asla sıfır sayılmaz (18–19.11)
+
+Görev belgesindeki kural. Uygulamada üç ayrı biçimde karşılaşıldı ve her biri ayrı ele alındı:
+kaynak kesintisi (GDELT), Google Trends'in 0 = "yeterli veri yok" değeri ("kaşe kaban"da 2 gün; düzeltme Palto'yu
++%78,0'dan +%65,3'e indirdi) ve Vikipedi'nin görüntülenmesiz günü döndürmemesi. Ayrıntı: [yontem.md](yontem.md).
+
+## K7 — Yıllık karşılaştırma (19.11)
+
+- **Bağlam:** "Palto Kasım'da her yıl artar" — dönemsel artış tek başına trend değildir.
+- **Karar:** Her terim için geçen yılın aynı dönemi de çekilir; dönemsel ve yıllık sonuç birleştirilerek
+  "sezon üstü artış / mevsimsel artış" gibi etiketler üretilir.
+
+## K8 — Analiz ayarları güncel config'ten (19.11)
+
+- **Bulgu:** Kayıtlı örnek veri, çalıştırma anındaki eski ayarlarla yeniden analiz edilince GDELT için düzeltilmiş
+  olan sahte düşüşler geri geliyordu.
+- **Karar:** `analyze` varsayılan olarak güncel `config.yaml`'ı kullanır; birebir tekrar için `--use-run-config`.
+  Kullanılan ayarlar her zaman `analysis.json`'a yazılır. Regresyon testi var.
+
+## K9 — Ayar dosyası şemayla doğrulanır (19.11)
+
+Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden
+geliniyordu; artık çalıştırmadan önce açık bir hata mesajıyla reddedilir.

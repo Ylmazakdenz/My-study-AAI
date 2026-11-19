@@ -1,6 +1,7 @@
 """Kaynak kayıt defteri. Yeni kaynak tipi eklemek için Source alt sınıfı yazıp TYPES'a ekleyin.
 
-Config'teki her `sources:` anahtarı bir kaynak örneğidir. Tipi `type:` ile verilir; verilmezse anahtar adı tip kabul edilir.
+Config'teki her `sources:` anahtarı bir kaynak örneğidir. Tipi `type:` ile verilir;
+verilmezse anahtar adı tip kabul edilir.
 Örn. aynı tipten iki kaynak:
   wikimedia:     {type: wikimedia, project: tr.wikipedia}
   wikimedia_en:  {type: wikimedia, project: en.wikipedia}

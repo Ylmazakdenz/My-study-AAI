@@ -96,41 +96,43 @@ bilgiler "(ikincil kaynak)" olarak işaretlendi.
 
 | Kaynak | Verinin anlamı | Otomatik erişim | Gereksinim | Kapsam (TR / dönem) | Giyime katkı | Kanıt |
 |---|---|---|---|---|---|---|
-| **Google Trends** | Google aramalarında göreli ilgi (0-100) | Resmi API **kapalı alfa** (24.07.2025'te duyuruldu, başvuruyla). `pytrends` resmi değil; Nisan 2025'te arşivlendiği bildiriliyor (ikincil kaynak), sık 429 | Alfa için başvuru; pytrends anahtarsız ama engellenebilir | TR (`geo=TR`) var; geçmiş dönem sorgulanabilir | **En güçlü sinyal**: ürün/stil arama ilgisi | [Trends API alfa](https://developers.google.com/search/apis/trends), [duyuru](https://developers.google.com/search/blog/2025/07/trends-api) — 19.11.2026 |
+| **Google Trends** | Google aramalarında göreli ilgi (0-100); 19.11.2026'da pytrends ile gerçek istekte 6/6 başarılı | Resmi API **kapalı alfa** (24.07.2025'te duyuruldu, başvuruyla). `pytrends` resmi değil; Nisan 2025'te arşivlendiği bildiriliyor (ikincil kaynak), sık 429 | Alfa için başvuru; pytrends anahtarsız ama engellenebilir | TR (`geo=TR`) var; geçmiş dönem sorgulanabilir | **En güçlü sinyal**: ürün/stil arama ilgisi | [Trends API alfa](https://developers.google.com/search/apis/trends), [duyuru](https://developers.google.com/search/blog/2025/07/trends-api) — 19.11.2026 |
 | **Pinterest Trends** | Pinterest aramalarında göreli hacim; haftalık 1 yıllık seri + haftalık/aylık/yıllık büyüme | `GET /v5/trends/keywords/{region}/top/{trend_type}` | İşletme hesabı + uygulama + OAuth; uç nokta sınırlı kullanıcıya açık | Bölge listesinde TR resmi sayfada doğrulanamadı; yalnız bugünün verisi | Modaya çok uygun (stil keşfi) ama **terim sorgulanamaz**, sadece en trend listesi döner | [Trends API](https://developers.pinterest.com/docs/analytics-and-reports/trends/) — 19.11.2026 |
 | **YouTube Data API v3** | Video izlenme/beğeni **toplamları** (anlık) | Resmi REST API | Ücretsiz API anahtarı; günlük 10.000 birim, `search.list` 100 birim | `chart=mostPopular` + `regionCode=TR` var (1 birim); geçmiş izlenme serisi **yok**, yalnız anlık istatistik | Stil videolarına ilgi; ama trend için zaman içinde tekrar tekrar çekmek gerekir | [Kota maliyetleri](https://developers.google.com/youtube/v3/determine_quota_cost), [videos.list](https://developers.google.com/youtube/v3/docs/videos/list) — 19.11.2026 |
 | **Wikimedia Analytics** | Vikipedi makalesinin günlük görüntülenmesi (bot hariç) | Resmi REST API, `per-article` uç noktası | Anahtar yok; **User-Agent zorunlu**; istekler sırayla | tr.wikipedia ≈ Türkçe okuyucu; 2015'ten bugüne günlük | Ürün tipine (trençkot, hırka...) duyulan **merak**; satın alma niyeti değil | [Analytics API](https://doc.wikimedia.org/analytics-api/), [erişim politikası](https://doc.wikimedia.org/generated-data-platform/aqs/analytics-api/documentation/access-policy.html) — 19.11.2026 |
-| **GDELT DOC 2.0** | Haberlerde terimin geçtiği **haber sayısı** (ya da tüm haberler içindeki %) | Resmi uç nokta `api/v2/doc/doc`, `timelinevolraw` | Anahtar yok; sık istek engellenir (biz 6 sn bekliyoruz) | `sourcecountry:turkey sourcelang:turkish`; varsayılan son 3 ay, `timespan` ile 1 yıla kadar | Medya/moda gündemi (bir ürün haberlerde konuşuluyor mu) | [DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/), [1 yıl arama](https://blog.gdeltproject.org/doc-geo-2-0-api-updates-full-year-searching-and-more/) — 19.11.2026 |
+| **GDELT DOC 2.0** | Haberlerde terimin geçtiği **haber sayısı** (ya da tüm haberler içindeki %); 4 gerçek çalıştırmada kullanılamadı | Resmi uç nokta `api/v2/doc/doc`, `timelinevolraw` | Anahtar yok; sık istek engellenir (biz 6 sn bekliyoruz) | `sourcecountry:turkey sourcelang:turkish`; varsayılan son 3 ay, `timespan` ile 1 yıla kadar | Medya/moda gündemi (bir ürün haberlerde konuşuluyor mu) | [DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/), [1 yıl arama](https://blog.gdeltproject.org/doc-geo-2-0-api-updates-full-year-searching-and-more/) — 19.11.2026 |
 | **Reddit** | Gönderi/yorum içerikleri | Resmi Data API (OAuth) | Kullanımdan önce **açık onay** şart; ticari kullanım sözleşmeli. Yeni başvuruların 31.10.2026'da kapandığı bildiriliyor (ikincil kaynak) | Türkiye/Türkçe kapsamı zayıf | Düşük | [Data API Terms](https://www.redditinc.com/policies/data-api-terms) — 19.11.2026 |
 
-### Seçim
+### Seçim (gerçek isteklerle denendikten sonra, 18–19.11.2026)
 
-- **Çalışan ana kaynak: Wikimedia** — gerçek, günlük, karşılaştırılabilir zaman serisi; anahtar/onay yok;
-  CC0 lisans. Sınırı: makalesi olan terimlerde çalışır ve "merak" ölçer, satın alma niyeti ölçmez.
-  İki örnek olarak kullanılır:
-  - `wikimedia` (Türkçe Vikipedi): Türkiye'ye en yakın sinyal, ancak ilk gerçek çalıştırmada (18.11.2026) giyim
-    makaleleri günde yalnızca **1,5–8 görüntüleme** aldı; bu hacimde yüzde değişimler gürültüdür.
-  - `wikimedia_en` (İngilizce Vikipedi): dünya geneli ilgi, hacim yüksek (günde 120–400 görüntüleme);
-    değişimler daha anlamlı. 2. denemede Colab'dan iki istek 429 (çok fazla istek) aldı → istekler arası 2 sn,
-    sunucunun `Retry-After` süresine uyan 20/40/60 sn bekleyerek tekrar deneme ve iletişim bilgili User-Agent eklendi.
-- **Destek kaynağı: GDELT** — aynı terimlerin haber görünürlüğü; anahtar yok. Gerçek çalıştırmalarda görülenler:
-  - 1. denemede zaman aşımı ve 429 (hız sınırı) → 90 sn zaman aşımı, istekler arası 8 sn, 15/30/45 sn bekleyerek
-    3 tekrar deneme eklendi.
-  - 2. denemede 56 günün yalnızca 39'unda veri geldi; eksik günler **tüm terimlerde aynı** ve o günlerde GDELT
-    toplam izlenen haber sayısını (`norm`) da vermiyor → bu GDELT'in kendi kesintisi. Kod bu günleri kaynak
-    kesintisi olarak tanır ve kapsama hesabından çıkarır (sıfır saymaz).
-  - Ayrıca yakın dönemde GDELT'in izlediği toplam haber sayısı önceki dönemin yarısının altına indi (ort. 95.548 →
-    40.766). Ham sayılar bu yüzden yapay olarak %35–75 "düşüyordu". Artık değerler izlenen toplam habere oranlanır
-    (10.000 haberde) ve izleme hacmi çok düşük günler bozuk sayılır. Bu düzeltmelerden sonra örnek çalıştırmada
-    GDELT için karşılaştırmaya yetecek gün kalmadı → sonuç "hesaplanamadı" (dürüst sonuç).
-  - 3. denemede Colab'dan tüm terimler 4 denemeye rağmen 429 aldı; terim başına ~2 dk beklendi (toplam ~13 dk).
-    Colab'ın ortak IP adresi GDELT'in sınırına takılıyor. Artık 2 tekrar deneme yapılır ve art arda 2 terim 429
-    alırsa kalan terimler denenmez (`stop_after_consecutive_429`), durum kaydedilir. GDELT için veri çekmeyi kendi
-    bilgisayarınızdan yapmanız önerilir.
-- **Google Trends: deneysel** — ürün seçimi için en anlamlı veri olduğu için adaptörü hazır (`enabled: false`).
-  Resmi alfa erişimine başvurulmalı; o zamana kadar pytrends ile denenir, engellenirse hata açıkça raporlanır.
-- Pinterest (onay + terim sorgulanamıyor), YouTube (zaman serisi yok) ve Reddit (onay kapanıyor) bu aşamada
-  seçilmedi. YouTube, ileride günlük toplama ile seri oluşturmak için aday.
+| Kaynak | Durum | Gerçek deneme sonucu |
+|---|---|---|
+| **Google Trends** (`google_trends`) | **Ana kaynak** | Ev internetinden (Mac, 19.11.2026) 6/6 terim, 56 günün hepsi geldi. Türkiye'deki aramaları ölçtüğü için giyimde ürün seçimine en doğrudan katkı veren kaynak. |
+| **İngilizce Vikipedi** (`wikimedia_en`) | Yedek / doğrulama | 4 çalıştırmada (3 Colab + 1 ev) tekrar deneme eklendikten sonra 6/6. Hacim yüksek (günde 120–500), ama dünya geneli ilgi; Türkiye'ye özgü değil. |
+| **Türkçe Vikipedi** (`wikimedia`) | Açık, ama zayıf sinyal | Her çalıştırmada 6/6, ama günde yalnızca 1,5–8 görüntüleme; kod hepsini "düşük hacim — güvenilir değil" olarak işaretler. |
+| **GDELT** (`gdelt`) | **Kapalı** (kod duruyor) | 4 çalıştırmanın hiçbirinde karşılaştırılabilir veri alınamadı (ayrıntı aşağıda). |
+| Pinterest, YouTube, Reddit | Seçilmedi | Onay gereksinimi + terim sorgulanamıyor / geçmiş seri yok / onay kapanıyor (tablodaki gerekçeler). |
+
+**Neden Google Trends ana kaynak?** İlk çalışan kaynak Wikimedia idi (anahtarsız, resmi). Ancak Türkçe
+Vikipedi'nin hacmi anlamlı sonuç için çok düşük, İngilizce Vikipedi ise Türkiye'yi temsil etmiyor. Google Trends
+resmi API'si kapalı alfa olduğundan resmi olmayan pytrends ile denendi ve çalıştı. Risk: resmi olmadığı için
+ileride engellenebilir; bu durumda hata açıkça kaydedilir ve hat Vikipedi ile çalışmaya devam eder. Kalıcı çözüm:
+resmi alfa erişimine başvurmak.
+
+**Google Trends sonuçlarını okurken:** değerler her terim için kendi dönemindeki zirvesine göre 0-100 arasında
+ölçeklenir. Bu yüzden yalnızca **aynı terimin** iki dönemi karşılaştırılır; terimlerin değerleri birbirine
+kıyaslanamaz. Sorgu seçimi sonucu etkiler (ör. "Palto" terimi için `kaşe kaban` aranıyor; `config.yaml`).
+
+**GDELT neden kapalı (gerçek çalıştırmalardan):**
+- 1. deneme (Colab): zaman aşımı ve 429 → 90 sn zaman aşımı, istekler arası bekleme ve tekrar deneme eklendi.
+- 2. deneme (Colab): 56 günün 39'unda veri; eksik günler **tüm terimlerde aynı**, o günlerde GDELT toplam izlenen
+  haber sayısını (`norm`) da vermiyor → GDELT'in kendi kesintisi. Ayrıca yakın dönemde izlenen toplam haber sayısı
+  yarının altına indi (ort. 95.548 → 40.766); ham sayılar bu yüzden yapay olarak %35–75 "düşüyordu". Kod artık
+  değerleri izlenen toplam habere oranlar, kesinti günlerini sıfır saymaz; sonuç: "hesaplanamadı".
+- 3. deneme (Colab): tüm terimler 4 denemeye rağmen 429; terim başına ~2 dk (toplam ~13 dk) → art arda 2 terim 429
+  alırsa kalanlar denenmez (`stop_after_consecutive_429`).
+- 4. deneme (ev interneti, 19.11.2026): yine 2 boş yanıt + 2 adet 429, kalan 2 terim denenmedi → sorun Colab'a
+  özgü değil.
 
 Kaynakların sayıları **birbirine eklenmez ve karşılaştırılmaz**; her biri kendi içinde yorumlanır.
 
@@ -216,7 +218,7 @@ trendpipe/
 ├── config.py         # YAML + .env okuma, dönem hesabı
 ├── models.py         # ortak veri yapıları ve durum kodları
 ├── sources/          # her kaynak bir adaptör: fetch(term, query, start, end) -> FetchResult
-│   ├── wikimedia.py (tr + en)  ├── gdelt.py  └── google_trends.py (deneysel)
+│   ├── google_trends.py (ana)  ├── wikimedia.py (tr + en)  └── gdelt.py (kapalı)
 ├── storage.py        # klasör düzeni, ham/düzenlenmiş kayıt
 ├── analysis.py       # dönem karşılaştırması
 ├── prompts.py        # model istemi
@@ -242,10 +244,9 @@ python -m pytest -q
 
 - Takım reposuna taşırken değiştirilecek iki yer: `notebooks/colab_run.ipynb` (4. hücre, `REPO`) ve
   `trendpipe/config.py` (`PROJECT_URL`, Wikimedia User-Agent iletişim adresi).
-- Google Trends adaptörü henüz gerçek istekle denenmedi (deneysel, kapalı).
 - Mevsimsellik: Eylül→Kasım artışı her yıl görülen mevsimsel artış olabilir; geçen yılın aynı dönemiyle
   karşılaştırma eklenmeli (Wikimedia 2015'ten beri veri veriyor).
 
 - Örnek çalıştırmalar: `data/sample/` (Colab, 18.11.2026; iki gerçek çalıştırma, açıklama klasördeki README'de).
-- Google Trends resmi API alfa başvurusu yapılmalı.
+- Google Trends resmi API alfa başvurusu yapılmalı (pytrends resmi değil, engellenebilir).
 - Sonraki aşama: MCP sunucusu olarak veri araçları, RAG (marka kataloğu), ürün eşleştirme.

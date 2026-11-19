@@ -391,3 +391,55 @@ def test_stops_after_consecutive_429(cfg, tmp_path, monkeypatch):
     assert len(sess.calls) == 2                                   # 3. ve 4. terim denenmedi
     assert all(f["status"] == "error" for f in m["fetches"])
     assert "Denenmedi" in m["fetches"][2]["error"] and m["fetches"][2]["attempts"] == 0
+
+
+# ---------- Google Trends adaptörü (sahte pytrends ile; ağ yok) ----------
+
+def _fake_pytrends(monkeypatch, df=None, exc=None):
+    import sys
+    import types
+    mod = types.ModuleType("pytrends.request")
+
+    class TrendReq:
+        def __init__(self, **kw):
+            pass
+
+        def build_payload(self, kw, timeframe, geo):
+            self.kw = kw
+
+        def interest_over_time(self):
+            if exc:
+                raise exc
+            return df
+    mod.TrendReq = TrendReq
+    monkeypatch.setitem(sys.modules, "pytrends", types.ModuleType("pytrends"))
+    monkeypatch.setitem(sys.modules, "pytrends.request", mod)
+
+
+def test_google_trends_parses_and_drops_partial(monkeypatch, cfg):
+    import pandas as pd
+    from trendpipe.sources.google_trends import GoogleTrendsSource
+    w = window(cfg)
+    idx = pd.date_range(w.start, w.end, freq="D")
+    df = pd.DataFrame({"hırka": range(len(idx)), "isPartial": [False] * (len(idx) - 1) + [True]}, index=idx)
+    _fake_pytrends(monkeypatch, df=df)
+    res = GoogleTrendsSource({"geo": "TR"}).fetch("h", "hırka", w.start, w.end)
+    assert res.status == FetchStatus.OK
+    assert len(res.points) == len(idx) - 1          # tamamlanmamış son gün analize girmez
+    assert '"isPartial": true' in res.raw_body       # ama ham kayıtta durur
+
+
+def test_google_trends_429_triggers_breaker_code(monkeypatch, cfg):
+    from trendpipe.sources.google_trends import GoogleTrendsSource
+    w = window(cfg)
+    _fake_pytrends(monkeypatch, exc=Exception("The request failed: Google returned a response with code 429"))
+    res = GoogleTrendsSource({}).fetch("h", "hırka", w.start, w.end)
+    assert res.status == FetchStatus.ERROR and res.http_status == 429
+
+
+def test_default_config_sources():
+    from pathlib import Path
+    from trendpipe.config import load_config
+    from trendpipe.sources import build_sources
+    cfg2 = load_config(Path(__file__).resolve().parents[1] / "config/config.yaml")
+    assert [s.name for s in build_sources(cfg2)] == ["google_trends", "wikimedia", "wikimedia_en"]

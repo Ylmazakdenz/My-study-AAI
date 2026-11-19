@@ -113,6 +113,8 @@ def source_aliases(src: str) -> list[str]:
             al |= {"tr.wikipedia", "wikipedia.tr", "türkçe vikipedi", "türkçe wikipedia"}
     if src == "gdelt":
         al |= {"gdelt haberleri"}
+    if src == "google_trends":
+        al |= {"google trends", "google aramaları"}
     return sorted(al, key=len, reverse=True)
 
 

@@ -30,13 +30,22 @@ analysis:
   flat_threshold_pct: 15
   # Karşılaştırma dönemi ortalaması bu değerin altındaysa "düşük hacim" uyarısı verilir (kaynak birimiyle).
   low_volume:
+    google_trends: 5     # 0-100 göreli ilgi (ortalama bunun altındaysa Google "yetersiz veri" sınırında)
     wikimedia: 20        # günlük sayfa görüntüleme (Türkçe Vikipedi)
     wikimedia_en: 100    # günlük sayfa görüntüleme (İngilizce Vikipedi)
     gdelt: 3             # günlük haber sayısı
-    google_trends: 5     # 0-100 göreli ilgi
 
 sources:
   # Her anahtar bir kaynak örneğidir; "type" kaynağın tipidir. Aynı tipten birden fazla örnek olabilir.
+  google_trends:
+    type: google_trends
+    # ANA KAYNAK: Türkiye'deki Google aramalarında göreli ilgi. Resmi API kapalı alfa; resmi olmayan pytrends
+    # kullanılır. 19.11.2026'da ev internetinden 6/6 terim başarılı. Engellenirse hata kaydedilir, hat Vikipedi ile sürer.
+    enabled: true
+    geo: "TR"
+    hl: "tr-TR"
+    request_interval_sec: 10
+    stop_after_consecutive_429: 2
   wikimedia:
     type: wikimedia
     enabled: true
@@ -61,7 +70,10 @@ sources:
     stop_after_consecutive_429: 3
   gdelt:
     type: gdelt
-    enabled: true
+    # KAPALI: 4 gerçek çalıştırmada (18-19.11.2026; 3 Colab + 1 ev interneti) karşılaştırılabilir veri alınamadı:
+    # tekrarlayan 429 (hız sınırı), zaman aşımı ve GDELT'in kendi veri kesintisi / izleme hacmi düşüşü.
+    # Kod duruyor; denemek için: --sources gdelt ya da enabled: true
+    enabled: false
     # GDELT aramayı İngilizce anahtar kelimeyle, makine çevirisi üzerinden yapar; filtreler Türkiye kaynaklı Türkçe haberler.
     source_country: "turkey"
     source_lang: "turkish"
@@ -74,15 +86,6 @@ sources:
     # 3. Colab denemesinde (18.11.2026) GDELT tüm terimlerde 4 denemeye rağmen 429 verdi ve terim başına ~2 dk
     # beklendi (toplam ~13 dk). Art arda 2 terim 429 alırsa kalan terimler denenmez, durum kaydedilir.
     stop_after_consecutive_429: 2
-  google_trends:
-    type: google_trends
-    # Resmi API henüz kapalı alfa; bu adaptör resmi olmayan pytrends kütüphanesini kullanır ve engellenebilir.
-    # Denemek için: pip install -r requirements-optional.txt ve enabled: true
-    enabled: false
-    geo: "TR"
-    hl: "tr-TR"
-    request_interval_sec: 10
-
 # Her terim, her kaynakta farklı biçimde sorgulanır:
 #   wikimedia     -> Türkçe Vikipedi makale başlığı (tam başlık, büyük/küçük harf önemli)
 #   wikimedia_en  -> İngilizce Vikipedi makale başlığı

@@ -112,10 +112,12 @@ def cmd_analyze(args, run_dir: Path | None = None) -> Path:
     return run_dir
 
 
-def cmd_interpret(args, run_dir: Path | None = None) -> int:
+def cmd_interpret(args, run_dir: Path | None = None, analyzed: bool = False) -> int:
     run_dir = run_dir or resolve_run_dir(args.run, args.out_dir)
     manifest = read_json(run_dir / "manifest.json")
-    if not (run_dir / "analysis.json").exists():
+    if not analyzed:
+        # Analiz her yorumdan önce güncel kodla yeniden yapılır (çevrimdışı, saniyeler sürer); böylece eski bir
+        # sürümün ürettiği analysis.json ile yorum yapılmaz.
         cmd_analyze(args, run_dir)
     analysis = read_json(run_dir / "analysis.json")
     rows = analysis["rows"]
@@ -182,7 +184,7 @@ def cmd_all(args) -> int:
     run_dir = cmd_fetch(args)
     print()
     cmd_analyze(args, run_dir)
-    return 0 if args.skip_llm else cmd_interpret(args, run_dir)
+    return 0 if args.skip_llm else cmd_interpret(args, run_dir, analyzed=True)
 
 
 # ---------------- argparse ----------------
@@ -255,6 +257,8 @@ def main(argv: list[str] | None = None) -> int:
     except (ConfigError, FileNotFoundError, ValueError) as exc:
         print(f"[HATA] {exc}", file=sys.stderr)
         return 1
+    except BrokenPipeError:  # çıktı `| head` gibi bir komuta verildiyse sessizce bitir
+        return 0
     return 1
 
 

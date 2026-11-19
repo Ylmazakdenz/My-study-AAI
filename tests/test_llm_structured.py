@@ -197,3 +197,39 @@ def test_correct_run5_answer_passes():
             "soyleyemediklerimiz": ["Veriler satın alma niyetini göstermez."]}
     rev = review(data, _run5_rows(), names)
     assert rev["ok"], rev["issues"]
+
+
+def test_report_matches_terms_case_insensitively(monkeypatch):
+    """F6: model 'PALTO' / 'google trends' yazsa da denetim ✅ verir ve rapor terimi gösterir (tutarlılık)."""
+    data = json.loads(json.dumps(GOOD))
+    data["one_cikanlar"][0].update(terim="PALTO", kaynak="google trends")
+    data["urun_katkisi"][0]["terim"] = "palto"
+    _fake_ollama(monkeypatch, [json.dumps(data, ensure_ascii=False)])
+    rows = _rows()
+    out = interpret(rows, _ctx(), {"host": "h", "model": "m"})
+    md = render_markdown(out, rows, NAMES, {"model": "m", "temperature": 0.2, "created_at": "t", "run_id": "r",
+                                             "window": W})
+    assert out["review"]["ok"]
+    assert "**PALTO** (Google Trends)" in md.split("## 2.")[0] and "Palto — Google Trends" in md
+
+
+def test_second_model_call_failure_keeps_first_attempt(monkeypatch):
+    """F7: 2. model çağrısı hata verirse 1. denemenin sonucu kaybolmaz."""
+    from trendpipe.llm import LLMError
+    bad = {**GOOD, "ozet": "Satışlar artar."}
+    replies = [json.dumps(bad, ensure_ascii=False)]
+
+    class Client:
+        def __init__(self, host=None, timeout=None):
+            pass
+
+        def chat(self, model, messages, options=None, format=None):
+            if not replies:
+                raise ConnectionError("bağlantı koptu")
+            return {"message": {"content": replies.pop(0)}}
+    mod = types.ModuleType("ollama")
+    mod.Client = Client
+    monkeypatch.setitem(sys.modules, "ollama", mod)
+    out = interpret(_rows(), _ctx(), {"host": "h", "model": "m"})
+    assert len(out["attempts"]) == 1 and out["chosen_attempt"] == 1 and not out["review"]["ok"]
+    assert LLMError

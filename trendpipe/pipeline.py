@@ -73,7 +73,12 @@ def fetch_run(cfg: dict, terms: list[Term], window: Window, sources: list[Source
                         if res is not None:
                             res.source, res.term_id, res.series = src.name, t.id, series
                         else:
-                            res = src.fetch(t.id, q, start, end)
+                            try:
+                                res = src.fetch(t.id, q, start, end)
+                            except Exception as exc:  # beklenmeyen adaptör hatası çalıştırmayı yarıda bırakmasın
+                                log.exception("%s/%s beklenmeyen hata", src.name, t.id)
+                                res = src._result(t.id, q, start, end, status=FetchStatus.ERROR,
+                                                  error=f"Beklenmeyen hata: {type(exc).__name__}: {exc}")
                             res.series = series
                             streak = streak + 1 if res.http_status == 429 else 0
                             if cache:

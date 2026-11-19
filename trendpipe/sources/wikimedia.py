@@ -62,7 +62,7 @@ class WikimediaSource(Source):
                     raise ValueError(f"HTTP {r.status_code}")
                 self._totals[key] = {datetime.strptime(i["timestamp"][:8], "%Y%m%d").date(): float(i["views"])
                                      for i in r.json().get("items", [])}
-            except (requests.RequestException, ValueError, KeyError, TypeError) as exc:
+            except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError) as exc:
                 self._totals[key] = f"proje toplamı alınamadı ({type(exc).__name__}: {exc})"
         return self._totals[key]
 
@@ -85,9 +85,10 @@ class WikimediaSource(Source):
             items = r.json().get("items", [])
             points = [Point(datetime.strptime(i["timestamp"][:8], "%Y%m%d").date(), float(i["views"]))
                       for i in items]
-        except (ValueError, KeyError, TypeError) as exc:
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
             return self._result(term_id, query, start, end, status=FetchStatus.ERROR,
                                 error=f"Yanıt çözümlenemedi: {exc}", **common)
+        article_attempts = self._attempts       # proje toplamı isteği sayacı sıfırlamasın
         note = None
         if points and self.settings.get("normalize_by_project", True):
             totals = self.project_totals(start, end)
@@ -97,7 +98,8 @@ class WikimediaSource(Source):
                 points = [Point(p.day, p.value, {"norm": totals[p.day]} if p.day in totals else None)
                           for p in points]
         status = FetchStatus.OK if points else FetchStatus.EMPTY
-        return self._result(term_id, query, start, end, status=status, points=points, error=note, **common)
+        return self._result(term_id, query, start, end, status=status, points=points, error=note,
+                            attempts=article_attempts, **common)
 
 
 def _detail(r: requests.Response) -> str:

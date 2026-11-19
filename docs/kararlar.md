@@ -100,6 +100,23 @@ arası 15 sn, 429'da 60/120 sn bekleyip tekrar deneme eklendi.
   terimleri en popüler olana göre ölçekleyip tam sayıya yuvarladığı için küçük terimler 0–3 aralığına sıkışır ve
   çoğu "yeterli veri yok" (0) olur. Önbellek aynı kazancı veri kaybı olmadan sağladığı için eklenmedi.
 
+## K14 — Repo denetimi (19.11)
+
+Tüm modüller baştan sona okunarak denetlendi; bulunan sorunlar düzeltildi ve her biri için regresyon testi eklendi
+(`tests/test_robustness.py`). Örnek verilerin analiz sonuçları düzeltmelerden sonra birebir aynı kaldı.
+
+| # | Sorun | Etki | Düzeltme |
+|---|---|---|---|
+| F1 | Adaptörde beklenmeyen istisna (ör. kaynak liste döndürürse) | Çalıştırma yarıda kalıp manifest yazılmıyordu | İstek `error` olarak kaydedilir, çalıştırma sürer |
+| F2 | Aynı saniyede iki çalıştırma | `FileExistsError` ile çökme | Klasöre `-2`, `-3` eki |
+| F3 | Google Trends kalıcı hatada da bekliyordu | Terim başına ~3 dk boşa bekleme | Yalnızca geçici hatalarda tekrar |
+| F4 | Vikipedi deneme sayısı | Proje toplamı isteği makale isteğinin sayısını eziyordu | Ayrı tutulur |
+| F5 | Kaynak ayarlarının türü denetlenmiyordu | `samples: "iki"` çalıştırma ortasında çöküyordu | Tür denetimi ayar okunurken |
+| F6 | Rapor eşleşmesi denetimle farklı kuraldaydı | Model "PALTO" yazarsa denetim ✅ ama rapor boş | Aynı normalleştirme |
+| F7 | 2. model çağrısı hata verirse | 1. denemenin yanıtı kayboluyordu | Önceki deneme kullanılır |
+| F8 | `interpret` eski `analysis.json`'ı kullanabiliyordu | Eski sürümün analiziyle yorum | Yorumdan önce yeniden analiz |
+| F9 | `.env`'de sayı yerine metin | Anlaşılmaz hata | Açık hata mesajı |
+
 ## K9 — Ayar dosyası şemayla doğrulanır (19.11)
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden

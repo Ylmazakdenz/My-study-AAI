@@ -21,10 +21,20 @@ TS_FIELDS = ["source", "series", "metric", "term_id", "label", "category", "quer
 
 
 def new_run_dir(base: str | Path) -> Path:
+    """Yeni çalıştırma klasörü. Aynı saniyede ikinci çalıştırma olursa -2, -3 ... eklenir (eski kayıt ezilmez)."""
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-    d = Path(base) / run_id
-    (d / "raw").mkdir(parents=True, exist_ok=False)
-    (d / "processed").mkdir(parents=True, exist_ok=True)
+    Path(base).mkdir(parents=True, exist_ok=True)
+    for i in range(1, 100):
+        d = Path(base) / (run_id if i == 1 else f"{run_id}-{i}")
+        try:
+            d.mkdir()
+            break
+        except FileExistsError:
+            continue
+    else:  # pragma: no cover
+        raise FileExistsError(f"Çalıştırma klasörü oluşturulamadı: {base}/{run_id}")
+    (d / "raw").mkdir()
+    (d / "processed").mkdir()
     return d
 
 

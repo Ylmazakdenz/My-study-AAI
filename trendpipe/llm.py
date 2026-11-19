@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import time
 
-from .checks import review
+from .checks import _norm, review
 from .logs import get_logger
 from .prompts import (
     CANDIDATE_LABELS,
@@ -92,7 +92,13 @@ def interpret(rows: list[dict], context: dict, settings: dict, max_attempts: int
     attempts = []
     total = 0.0
     for i in range(max_attempts):
-        out = chat(messages, settings, fmt=RESPONSE_SCHEMA)
+        try:
+            out = chat(messages, settings, fmt=RESPONSE_SCHEMA)
+        except LLMError as exc:
+            if not attempts:
+                raise
+            log.warning("yorum denemesi %d başarısız (%s); önceki deneme kullanılacak", i + 1, exc)
+            break
         total += out["elapsed_sec"]
         data = _parse(out["content"])
         rev = review(data, rows, names) if data is not None else \
@@ -137,11 +143,12 @@ def render_markdown(result: dict, rows: list[dict], names: dict, meta: dict) -> 
     rev = result["review"]
     data = result["data"] if isinstance(result.get("data"), dict) else {}
     w = meta["window"]
-    by_key = {(r["label"].lower(), r["source"]): r for r in rows}
+    # Eşleştirme, denetimle (checks._norm) aynı kuralla yapılır; büyük/küçük harf ve Türkçe I/İ farkı sorun olmaz.
+    by_key = {(_norm(r["label"]), r["source"]): r for r in rows}
     alias = {}
     for key, disp in names.items():
-        alias[key.lower()] = key
-        alias[disp.lower()] = key
+        alias[_norm(key)] = key
+        alias[_norm(disp)] = key
     lines = [
         "# Trend yorumu", "",
         f"- Model: `{meta['model']}` (Ollama), sıcaklık {meta['temperature']} — {meta['created_at']} — "
@@ -160,14 +167,14 @@ def render_markdown(result: dict, rows: list[dict], names: dict, meta: dict) -> 
     for it in data.get("one_cikanlar", []):
         if not isinstance(it, dict):
             continue
-        src = alias.get(str(it.get("kaynak", "")).lower(), it.get("kaynak"))
-        r = by_key.get((str(it.get("terim", "")).lower(), src))
+        src = alias.get(_norm(str(it.get("kaynak", ""))), it.get("kaynak"))
+        r = by_key.get((_norm(str(it.get("terim", ""))), src))
         if not r or r.get("trend_label") not in CANDIDATE_LABELS:
             continue  # aday olmayan seçim rapora girmez (uyarılarda listelenir)
         chosen.append(r)
         lines.append(f"- **{it.get('terim')}** ({names.get(src, it.get('kaynak'))}) — "
                      f"*{TREND_TR.get(r['trend_label'])}*: {it.get('neden_onemli')}")
-    chosen_terms = {r["label"].lower() for r in chosen}
+    chosen_terms = {_norm(r["label"]) for r in chosen}
     if not chosen:
         lines.append("- Güvenilir bir değişim gösteren terim yok." if not candidates(rows) else
                      "- Model öne çıkan terim seçmedi.")
@@ -177,7 +184,7 @@ def render_markdown(result: dict, rows: list[dict], names: dict, meta: dict) -> 
 
     lines += ["", "## 3. Ürün seçimine olası katkı", ""]
     lines += [f"- **{it.get('terim')}**: {it.get('oneri')}" for it in data.get("urun_katkisi", [])
-              if isinstance(it, dict) and str(it.get("terim", "")).lower() in chosen_terms] or ["- (yok)"]
+              if isinstance(it, dict) and _norm(str(it.get("terim", ""))) in chosen_terms] or ["- (yok)"]
 
     lines += ["", "## 4. Bu veriyle söyleyemediklerimiz", ""]
     lines += [f"- {x}" for x in data.get("soyleyemediklerimiz", []) if isinstance(x, str)] or ["- (model yazmadı)"]

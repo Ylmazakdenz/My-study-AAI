@@ -45,3 +45,18 @@ def test_typos_are_rejected(tmp_path, mutate, expected):
     with pytest.raises(ConfigError) as e:
         load_config(_write(tmp_path, cfg))
     assert expected in str(e.value)
+
+
+@pytest.mark.parametrize("mutate, expected", [
+    (lambda c: c["sources"]["google_trends"].update(samples="iki"), "'samples' geçersiz"),
+    (lambda c: c["sources"]["google_trends"].update(samples=9), "'samples' geçersiz"),
+    (lambda c: c["sources"]["google_trends"].update(geo="turkiye"), "'geo' geçersiz"),
+    (lambda c: c["sources"]["wikimedia"].update(agent="users"), "'agent' geçersiz"),
+    (lambda c: c["sources"]["wikimedia_en"].update(project="en.wiki"), "'project' geçersiz"),
+])
+def test_source_option_types_are_checked(tmp_path, mutate, expected):
+    cfg = _base()
+    mutate(cfg)
+    with pytest.raises(ConfigError) as e:
+        load_config(_write(tmp_path, cfg))
+    assert expected in str(e.value)

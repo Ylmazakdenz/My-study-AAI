@@ -103,10 +103,21 @@ Düşük hacim, hesaplanamadı ve veri yok durumları etiket olarak aynen geçer
 5. Rapor (`interpretation.md`) Python tarafından oluşturulur. 2. sorunun (ölçüm ve dönem) sayıları ve raporun
    sonundaki tüm sonuç tablosu modelden bağımsızdır.
 
-## 6. Bilinen sınırlar
+## 6. Sağlamlık
+
+- Bir kaynak beklenmeyen bir hata verse de çalıştırma yarıda kalmaz; o istek `error` olarak kaydedilir.
+- Google Trends'te yalnızca geçici hatalarda (429, zaman aşımı, bağlantı, 5xx) beklenip tekrar denenir; kalıcı
+  hatalarda (ör. 400) beklenmez.
+- Ayar dosyasındaki kaynak ayarlarının hem adı hem türü denetlenir (ör. `samples: "iki"`, `geo: turkiye`).
+- `interpret`, yorumdan önce analizi güncel kodla yeniden yapar; eski bir sürümün analizi kullanılmaz.
+- Aynı saniyede başlayan iki çalıştırma birbirinin klasörünü ezmez (`-2` eki).
+
+## 7. Bilinen sınırlar
 
 - Göreli ilgi ve bilgi merakı ölçülür; satış, stok, fiyat veya talep verisi yoktur.
 - Google Trends resmi değildir (pytrends) ve örnekleme kullanır; aynı sorgu biraz farklı değer verebilir.
 - Sorgu seçimi sonucu etkiler (ör. "Palto" için `kaşe kaban`).
 - Yıllık karşılaştırma tek bir önceki yıla dayanır.
 - İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.
+- Vikipedi görüntülemesi makale başlığına göre sayılır; başlık bir yönlendirme sayfasıysa yalnızca yönlendirmenin
+  görüntülemesi gelir. `config.yaml`'daki başlıklar asıl makale başlığı olmalıdır.

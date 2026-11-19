@@ -128,13 +128,21 @@ def compute_window(cfg: dict, today: date | None = None, end: date | None = None
     return Window(baseline_start, baseline_end, recent_start, end, ly_start, ly_end)
 
 
+def _env_float(name: str, default: str) -> float:
+    raw = os.getenv(name, default).strip()
+    try:
+        return float(raw)
+    except ValueError:
+        raise ConfigError(f".env içinde {name} sayı olmalı (şu an: '{raw}')") from None
+
+
 def llm_settings() -> dict:
     """Model bağlantı ayarları .env / ortam değişkenlerinden gelir; repoya yazılmaz."""
     return {
-        "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
-        "model": os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
-        "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.2")),
-        "timeout": float(os.getenv("OLLAMA_TIMEOUT", "300")),
+        "host": os.getenv("OLLAMA_HOST", "http://localhost:11434").strip(),
+        "model": os.getenv("OLLAMA_MODEL", "llama3.1:8b").strip(),
+        "temperature": _env_float("OLLAMA_TEMPERATURE", "0.2"),
+        "timeout": _env_float("OLLAMA_TIMEOUT", "300"),
     }
 
 
@@ -146,7 +154,8 @@ def user_agent() -> str:
     daha sıkı hız sınırına takılabilir; e-posta verilmezse proje adresi iletişim olarak yazılır."""
     contact = os.getenv("CONTACT_EMAIL", "").strip()
     contact_part = f"{PROJECT_URL}; {contact}" if contact else PROJECT_URL
-    return f"SENG360-trendpipe/0.1 ({contact_part}) python-requests"
+    from . import __version__
+    return f"SENG360-trendpipe/{__version__} ({contact_part}) python-requests"
 
 
 _TR = str.maketrans("çğıöşüÇĞİÖŞÜ ", "cgiosuCGIOSU_")

@@ -6,18 +6,39 @@ bir ayar (`geoo: TR`) açık bir hata mesajıyla reddedilir; eskiden bunlar sess
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from typing import Literal
 
-# Kaynak tipine özgü izin verilen ayarlar (ortak olanlar SourceCfg alanlarıdır)
-TYPE_KEYS: dict[str, set[str]] = {
-    "wikimedia": {"project", "access", "agent", "normalize_by_project"},
-    "gdelt": {"source_country", "source_lang", "mode"},
-    "google_trends": {"geo", "hl", "samples"},
-}
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+# Kaynak tipine özgü ayarlar: hem ad hem tür denetlenir
+# (ör. samples: "iki" çalıştırma sırasında değil, burada yakalanır)
+class WikimediaOpts(_Strict):
+    project: str = Field("tr.wikipedia", pattern=r"^[a-z\-]+\.wikipedia$")
+    access: Literal["all-access", "desktop", "mobile-app", "mobile-web"] = "all-access"
+    agent: Literal["user", "spider", "automated", "all-agents"] = "user"
+    normalize_by_project: bool = True
+
+
+class GdeltOpts(_Strict):
+    source_country: str = ""
+    source_lang: str = ""
+    mode: Literal["timelinevolraw", "timelinevol"] = "timelinevolraw"
+
+
+class GoogleTrendsOpts(_Strict):
+    geo: str = Field("TR", pattern=r"^[A-Z]{2}(-[A-Z0-9]{1,3})?$")
+    hl: str = "tr-TR"
+    samples: int = Field(1, ge=1, le=5)
+
+
+TYPE_OPTS: dict[str, type[_Strict]] = {"wikimedia": WikimediaOpts, "gdelt": GdeltOpts,
+                                       "google_trends": GoogleTrendsOpts}
+TYPE_KEYS: dict[str, set[str]] = {k: set(v.model_fields) for k, v in TYPE_OPTS.items()}
 
 
 class BrandCfg(_Strict):
@@ -94,6 +115,12 @@ class AppCfg(_Strict):
             if unknown:
                 raise ValueError(f"'{name}' kaynağında bilinmeyen ayar: {', '.join(sorted(unknown))} "
                                  f"({typ} için geçerli olanlar: {', '.join(sorted(TYPE_KEYS[typ]))})")
+            try:
+                TYPE_OPTS[typ].model_validate(sc.model_extra or {})
+            except ValidationError as exc:
+                e = exc.errors()[0]
+                raise ValueError(f"'{name}' kaynağında '{'.'.join(str(x) for x in e['loc'])}' geçersiz: "
+                                 f"{e['msg']}") from None
         return v
 
     @model_validator(mode="after")

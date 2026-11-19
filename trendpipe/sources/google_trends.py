@@ -19,6 +19,13 @@ from ..models import FetchStatus, Point
 from .base import Source, log
 
 
+def _transient(msg: str) -> bool:
+    """Geçici olabilecek hatalar (bekleyip tekrar denemeye değer)."""
+    m = msg.lower()
+    return any(k in m for k in ("timeout", "timed out", "connection", "temporarily", " 500", " 502", " 503",
+                                " 504", "code 5"))
+
+
 class GoogleTrendsSource(Source):
     type_name = "google_trends"
     metric = "relative_interest_0_100"
@@ -64,6 +71,8 @@ class GoogleTrendsSource(Source):
                     is_429 = "429" in msg or "TooManyRequests" in msg
                     last_error = (msg, 429 if is_429 else None)
                     log.info("google_trends %s deneme %d: %s", query, retry + 1, msg)
+                    if not (is_429 or _transient(msg)):
+                        break  # kalıcı hata (ör. 400): beklemek işe yaramaz
                     if retry < self.max_retries:
                         wait = self.retry_backoff * (retry + 1)
                         log.info("google_trends: %.0f sn beklenip tekrar denenecek", wait)

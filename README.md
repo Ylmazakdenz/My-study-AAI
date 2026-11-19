@@ -35,11 +35,11 @@ PyCharm'da: proje açıkken *Settings → Python Interpreter* ile `.venv`'i seç
 ## Kullanım
 
 ```bash
-trendpipe all                          # veri çek → hesapla → yorumlat (≈3-4 dk)
+trendpipe all                          # veri çek → hesapla → yorumlat (ilk çalıştırma ≈5-6 dk)
 trendpipe all --skip-llm               # modelsiz
 trendpipe fetch                        # yalnızca veri çek        -> data/runs/<zaman>/
 trendpipe analyze   --run latest       # yalnızca hesapla (ağ gerekmez)
-trendpipe interpret --run latest       # yalnızca yorumlat
+trendpipe interpret --run latest       # analizi güncel kodla yeniler ve yorumlatır
 trendpipe -v fetch                     # ayrıntılı log
 trendpipe all --refresh                # önbelleği yok say, her şeyi kaynaktan yeniden çek
 trendpipe clean --keep 10              # eski çalıştırmaları temizle (önce planı gösterir; silmek için --yes)

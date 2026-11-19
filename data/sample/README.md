@@ -1,8 +1,14 @@
 # Örnek çalıştırmalar
 
-`--run latest` en yeni klasörü (20261118-233854) seçer; diğerini `--run data/sample/20261118-231912` ile verin.
+`--run latest` en yeni klasörü (20261119-162956) seçer; diğerlerini `--run data/sample/<klasör>` ile verin.
 
-## 20261118-233854 (en yeni, önerilen)
+## 20261119-162956 (en yeni, önerilen)
+Yerel bilgisayarda (Mac, ev interneti, PyCharm) 19.11.2026'da `python -m trendpipe all --skip-llm` ile çekildi.
+**18/18 istek başarılı:** Google Trends (Türkiye, ana kaynak), Türkçe ve İngilizce Vikipedi. Dönem 23.09.2026 –
+17.11.2026. Google Trends'te "kaşe kaban" sorgusunda 2 gün 0 (Google'a göre "yeterli veri yok") var; analizde bu
+günler eksik sayıldı. Model yorumu Colab'da 6a hücresiyle üretilir.
+
+## 20261118-233854
 Colab, 18.11.2026, tekrar deneme kodunun eklendiği sürüm. **Türkçe ve İngilizce Vikipedi'nin 12 isteğinin hepsi
 başarılı.** GDELT'te 5 terim 4 denemeye rağmen 429 (hız sınırı), 1 terim boş yanıt — hata kaydı olarak olduğu gibi
 bırakıldı. `interpretation.md`: `llama3.1:8b` yorumu. Model yanıtı değiştirilmedi; tutarlılık kontrolü, '**4.**'

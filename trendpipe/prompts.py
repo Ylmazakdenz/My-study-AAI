@@ -117,7 +117,8 @@ def limitations(rows: list[dict], names: dict) -> list[str]:
             out.append(f"- {nm}: kaynağın kendisinde {gaps} günlük veri kesintisi var; bu günler hesaba katılmadı.")
     if any(k == "google_trends" or v == "Google Trends" for k, v in names.items()):
         out.append("- Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir; yalnızca "
-                   "aynı terimin iki dönemi karşılaştırılabilir, terimler birbiriyle kıyaslanamaz.")
+                   "aynı terimin iki dönemi karşılaştırılabilir, terimler birbiriyle kıyaslanamaz. Google aramaların "
+                   "bir örneklemini kullandığı için aynı sorgu tekrarlandığında değerler biraz değişebilir.")
     if any(k.endswith("_en") or "İngilizce" in v for k, v in names.items()):
         out.append("- İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.")
     out.append("- Veriler bilgi merakı ve haber görünürlüğünü ölçer; satış, stok, fiyat veya tüketici talebi "

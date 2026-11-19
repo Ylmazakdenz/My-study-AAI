@@ -180,10 +180,19 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
     rows = []
     gaps: dict[str, set[date]] = {}
     norm_sources = set(a.get("normalize_by_norm") or [])
+    zero_missing = set(a.get("zero_is_missing") or [])
     series = dict(series)
     normalized: dict[str, int] = {}
+    zeros_dropped: dict[tuple[str, str], int] = {}
     for src in {r["source"] for r in manifest["fetches"]}:
         ok_ids = [r["term_id"] for r in manifest["fetches"] if r["source"] == src and r["status"] == FetchStatus.OK]
+        if src in zero_missing:
+            # Google Trends: 0 = "bu terim için yeterli veri yok" -> eksik gün, sıfır değil.
+            for t in ok_ids:
+                pts = series.get((src, t), [])
+                kept = [p for p in pts if p.value != 0]
+                zeros_dropped[(src, t)] = len(pts) - len(kept)
+                series[(src, t)] = kept
         if src in norm_sources and ok_ids:
             new, dropped = normalize_by_norm([series.get((src, t), []) for t in ok_ids],
                                              float(a.get("min_norm_ratio", 0.2)))
@@ -202,6 +211,9 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
                                flat_threshold_pct=float(a.get("flat_threshold_pct", 15)),
                                low_volume=low.get(rec["source"]), gap_days=gaps.get(rec["source"]),
                                min_window_days_ratio=float(a.get("min_window_days_ratio", 0.5)))
+        if zeros_dropped.get((rec["source"], rec["term_id"])):
+            stats["notes"].insert(0, f"{zeros_dropped[(rec['source'], rec['term_id'])]} gün 0 değeri (kaynağa göre "
+                                     "'yeterli veri yok') eksik sayıldı, sıfır olarak hesaba katılmadı.")
         if rec["source"] in normalized:
             stats["metric"] = "articles_per_10k_monitored"
             stats["notes"].insert(0, f"Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme hacmi "

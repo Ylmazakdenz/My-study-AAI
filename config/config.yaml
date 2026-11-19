@@ -26,6 +26,8 @@ analysis:
   # oranlanır (10.000 haberde); izleme hacmi medyanın min_norm_ratio katının altındaki günler bozuk sayılıp çıkarılır.
   normalize_by_norm: [gdelt]
   min_norm_ratio: 0.2
+  # Google Trends'te 0 "bu terim için yeterli veri yok" demektir (Google açıklaması); bu günler eksik sayılır.
+  zero_is_missing: [google_trends]
   # Bu eşikten küçük yüzde değişimler "yatay" kabul edilir.
   flat_threshold_pct: 15
   # Karşılaştırma dönemi ortalaması bu değerin altındaysa "düşük hacim" uyarısı verilir (kaynak birimiyle).

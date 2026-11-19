@@ -122,6 +122,9 @@ resmi alfa erişimine başvurmak.
 **Google Trends sonuçlarını okurken:** değerler her terim için kendi dönemindeki zirvesine göre 0-100 arasında
 ölçeklenir. Bu yüzden yalnızca **aynı terimin** iki dönemi karşılaştırılır; terimlerin değerleri birbirine
 kıyaslanamaz. Sorgu seçimi sonucu etkiler (ör. "Palto" terimi için `kaşe kaban` aranıyor; `config.yaml`).
+Google'a göre **0 değeri "bu terim için yeterli veri yok"** demektir; kod bu günleri sıfır değil eksik sayar
+(`analysis.zero_is_missing`). Google aramaların bir örneklemini kullandığından aynı sorgu birkaç dakika arayla
+biraz farklı değer verebilir (19.11.2026'da Palto: +%78,6 ve +%78,0); sınıflandırma değişmedi.
 
 **GDELT neden kapalı (gerçek çalıştırmalardan):**
 - 1. deneme (Colab): zaman aşımı ve 429 → 90 sn zaman aşımı, istekler arası bekleme ve tekrar deneme eklendi.

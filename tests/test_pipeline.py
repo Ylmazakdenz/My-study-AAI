@@ -443,3 +443,19 @@ def test_default_config_sources():
     from trendpipe.sources import build_sources
     cfg2 = load_config(Path(__file__).resolve().parents[1] / "config/config.yaml")
     assert [s.name for s in build_sources(cfg2)] == ["google_trends", "wikimedia", "wikimedia_en"]
+
+
+def test_google_trends_zero_is_missing(cfg):
+    """Google Trends'te 0 = yeterli veri yok -> eksik gün (19.11.2026 'kaşe kaban' örneği: 2 gün 0)."""
+    from datetime import timedelta
+    from trendpipe.analysis import analyze_run
+    w = window(cfg)
+    vals = [0, 30, 0, 30, 30, 30, 30] + [60] * 7                         # pencereler 7+7 gün
+    pts = [Point(w.start + timedelta(days=i), v) for i, v in enumerate(vals)]
+    manifest = {"fetches": [{"source": "google_trends", "term_id": "p", "label": "Palto", "status": "ok"}]}
+    a = {"analysis": {"min_coverage": 0.7, "zero_is_missing": ["google_trends"]}}
+    r = analyze_run(manifest, {("google_trends", "p"): pts}, a, w)[0]
+    assert r["baseline_mean"] == 30.0 and r["pct_change"] == 100.0       # sıfırlar ortalamayı düşürmedi
+    assert any("eksik sayıldı" in n for n in r["notes"])
+    r0 = analyze_run(manifest, {("google_trends", "p"): pts}, {"analysis": {"min_coverage": 0.7}}, w)[0]
+    assert r0["pct_change"] > 100                                         # kural kapalıyken yapay yüksek

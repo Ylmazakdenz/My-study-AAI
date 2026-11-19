@@ -467,3 +467,34 @@ def test_google_trends_zero_is_missing(cfg):
     assert any("eksik sayıldı" in n for n in r["notes"])
     r0 = analyze_run(manifest, {("google_trends", "p", "main"): pts}, {"analysis": {"min_coverage": 0.7}}, w)[0]
     assert r0["pct_change"] > 100                                         # kural kapalıyken yapay yüksek
+
+
+def test_google_trends_retries_after_429(monkeypatch, cfg):
+    import sys
+    import types
+
+    import pandas as pd
+
+    from trendpipe.sources.google_trends import GoogleTrendsSource
+    w = window(cfg)
+    idx = pd.date_range(w.start, w.end, freq="D")
+    calls = {"n": 0}
+
+    class TrendReq:
+        def __init__(self, **kw):
+            pass
+
+        def build_payload(self, kw, timeframe, geo):
+            pass
+
+        def interest_over_time(self):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise Exception("TooManyRequestsError: Google returned a response with code 429")
+            return pd.DataFrame({"x": [50] * len(idx), "isPartial": [False] * len(idx)}, index=idx)
+    mod = types.ModuleType("pytrends.request")
+    mod.TrendReq = TrendReq
+    monkeypatch.setitem(sys.modules, "pytrends", types.ModuleType("pytrends"))
+    monkeypatch.setitem(sys.modules, "pytrends.request", mod)
+    res = GoogleTrendsSource({"max_retries": 2, "retry_backoff_sec": 0}).fetch("t", "x", w.start, w.end)
+    assert res.status == FetchStatus.OK and res.attempts == 2 and res.http_status == 200

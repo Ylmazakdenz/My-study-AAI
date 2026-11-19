@@ -12,6 +12,7 @@ mutlak arama sayısı DEĞİLDİR. Bu yüzden yalnızca aynı terimin iki dönem
 from __future__ import annotations
 
 import json
+import time
 from datetime import date
 
 from ..models import FetchStatus, Point
@@ -48,16 +49,26 @@ class GoogleTrendsSource(Source):
         self._attempts = 0
         last_error: tuple[str, int | None] | None = None
         for _ in range(n_samples):
-            self._throttle()
-            self._attempts += 1
-            try:
-                client = TrendReq(hl=self.settings.get("hl", "tr-TR"), tz=-180, timeout=(10, 30))
-                client.build_payload([query], timeframe=timeframe, geo=geo)
-                df = client.interest_over_time()
-            except Exception as exc:  # pytrends farklı istisna türleri fırlatabiliyor (429 dahil)
-                msg = f"{type(exc).__name__}: {exc}"
-                last_error = (msg, 429 if "429" in msg or "TooManyRequests" in msg else None)
-                log.info("google_trends %s: %s", query, msg)
+            df = None
+            for retry in range(self.max_retries + 1):
+                self._throttle()
+                self._attempts += 1
+                try:
+                    client = TrendReq(hl=self.settings.get("hl", "tr-TR"), tz=-180, timeout=(10, 30))
+                    client.build_payload([query], timeframe=timeframe, geo=geo)
+                    df = client.interest_over_time()
+                    last_error = None
+                    break
+                except Exception as exc:  # pytrends farklı istisna türleri fırlatabiliyor (429 dahil)
+                    msg = f"{type(exc).__name__}: {exc}"
+                    is_429 = "429" in msg or "TooManyRequests" in msg
+                    last_error = (msg, 429 if is_429 else None)
+                    log.info("google_trends %s deneme %d: %s", query, retry + 1, msg)
+                    if retry < self.max_retries:
+                        wait = self.retry_backoff * (retry + 1)
+                        log.info("google_trends: %.0f sn beklenip tekrar denenecek", wait)
+                        time.sleep(wait)
+            if last_error is not None:
                 continue
             if df is None or df.empty or query not in df.columns:
                 samples.append([])

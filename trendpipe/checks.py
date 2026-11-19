@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from .prompts import CANDIDATE_LABELS
+from .prompts import CANDIDATE_LABELS, DOWN_LABELS
 
 _PCT = re.compile(r"([-+−]?\d+(?:[.,]\d+)?)\s*%|%\s*([-+−]?\d+(?:[.,]\d+)?)")
 
@@ -95,6 +95,11 @@ def split_sections(text: str) -> tuple[str, str]:
     return (text[:m.start()], text[m.start():]) if m else (text, "")
 
 
+_YOY_PHRASE = re.compile(r"geçen yıl|önceki yıl|geçen sezon|yıllık", re.I)
+_YOY_UP = re.compile(r"yüksek|fazla|üzerinde|üstünde|arttı|artış|yüksel|güçlü", re.I)
+_YOY_DOWN = re.compile(r"düşük|daha az|altında|azal|düştü|düşüş|geril|zayıf", re.I)
+_PROMOTE = re.compile(r"öne çıkar", re.I)
+_NOT_PROMOTE = re.compile(r"çıkarılmamalı|çıkarmamak|çıkarmak için erken|yerine|değil|önermiyoruz|izlenmeli", re.I)
 _CLAUSE = re.compile(r"[;.]\s|;|,\s|\b(?:ama|ancak|fakat|iken|oysa|buna karşın)\b", re.I)
 _COMPARE = re.compile(r"daha (yüksek|düşük|fazla|az|çok)", re.I)
 _COMPUTED = {"computed", "baseline_zero"}
@@ -134,8 +139,18 @@ def check_claims(text: str, rows: list[dict]) -> list[str]:
                 for clause in _CLAUSE.split(line):
                     if _lower_tr(label) not in _lower_tr(clause):
                         continue
+                    # Yıllık ifade ("geçen yılın aynı döneminden yüksek") dönemsel ifadeden ayrı denetlenir.
+                    m = _YOY_PHRASE.search(clause)
+                    pop_text, yoy_text = (clause[:m.start()], clause[m.start():]) if m else (clause, "")
+                    if yoy_text:
+                        yoy_dirs = {r.get("yoy_direction") for r in mine if r.get("yoy_direction")}
+                        for regex, d, word in ((_YOY_UP, "up", "geçen yıldan yüksek"),
+                                               (_YOY_DOWN, "down", "geçen yıldan düşük")):
+                            if regex.search(yoy_text) and yoy_dirs and d not in yoy_dirs:
+                                issues.append(f"'{label}' için '{word}' iddiası var ama hesaplanan yıllık yön farklı "
+                                              f"({', '.join(sorted(yoy_dirs))}).")
                     for regex, d, word in ((_UP, "up", "artış"), (_DOWN, "down", "düşüş")):
-                        if not regex.search(clause):
+                        if not regex.search(pop_text):
                             continue
                         matching = [r for r in mine if r.get("direction") == d or r.get("yoy_direction") == d]
                         if not matching:
@@ -195,6 +210,8 @@ def validate_structured(data, rows: list[dict], names: dict) -> list[str]:
         for a in (key, disp):
             alias[_norm(a)] = key
     chosen = set()
+    chosen_labels: dict[str, set[str]] = {}
+    label_of = {(_norm(r["label"]), r["source"]): r.get("trend_label") for r in rows}
     for item in data["one_cikanlar"]:
         if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("terim", "kaynak",
                                                                                           "neden_onemli")):
@@ -206,6 +223,7 @@ def validate_structured(data, rows: list[dict], names: dict) -> list[str]:
                           "terim-kaynak çiftleri seçilebilir.")
         else:
             chosen.add(_norm(item["terim"]))
+            chosen_labels.setdefault(_norm(item["terim"]), set()).add(label_of[(_norm(item["terim"]), src)])
     if not allowed and data["one_cikanlar"]:
         issues.append("Aday listesi boş olduğu halde öne çıkan terim yazılmış.")
     for item in data["urun_katkisi"]:
@@ -214,6 +232,11 @@ def validate_structured(data, rows: list[dict], names: dict) -> list[str]:
             issues.append("'urun_katkisi' içinde şemaya uymayan öğe var.")
         elif _norm(item["terim"]) not in chosen:
             issues.append(f"'urun_katkisi' içindeki '{item['terim']}' öne çıkanlar arasında değil.")
+        elif _PROMOTE.search(item["oneri"]) and not _NOT_PROMOTE.search(item["oneri"]) and \
+                chosen_labels.get(_norm(item["terim"]), set()) and \
+                chosen_labels[_norm(item["terim"])] <= DOWN_LABELS:
+            issues.append(f"'{item['terim']}' ilgisi düşüyor / geçen yıldan düşük olduğu halde 'öne çıkar' "
+                          "önerilmiş.")
     if not all(isinstance(x, str) for x in data["soyleyemediklerimiz"]):
         issues.append("'soyleyemediklerimiz' yalnızca metin maddeleri içermeli.")
     return issues

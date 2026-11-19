@@ -64,6 +64,28 @@ kaynak kesintisi (GDELT), Google Trends'in 0 = "yeterli veri yok" değeri ("kaş
 - **Karar:** `analyze` varsayılan olarak güncel `config.yaml`'ı kullanır; birebir tekrar için `--use-run-config`.
   Kullanılan ayarlar her zaman `analysis.json`'a yazılır. Regresyon testi var.
 
+## K10 — Vikipedi değerleri proje toplamına oranlanır (19.11)
+
+- **Bulgu:** İlk yıllık karşılaştırmada (19.11, yerel) İngilizce Vikipedi'de 6 terimin **hepsi** geçen yıla göre
+  %27–62 düşük çıktı (Kot pantolon -%62). Tüm makalelerde aynı yönde büyük düşüş, terimlere değil kaynağa ait bir
+  değişimdir: Wikimedia 2025'te bot tespitini güncelledi ve insan görüntülemelerinde yıllık ~%8 düşüş bildirdi.
+- **Karar:** Makale görüntülemesi, projenin o günkü toplam insan görüntülemesine oranlanır (milyonda). GDELT'teki
+  izleme hacmi sorunuyla (K5) aynı ilke: kaynağın genel hacmi değişirse terim değişti sanılmamalı.
+
+## K11 — Google Trends: seyrek istek + bekleyerek tekrar (19.11)
+
+Yıllık seri istek sayısını ikiye katladı; aynı gün birkaç tam çalıştırmadan sonra 2 terimde 429 alındı. İstekler
+arası 15 sn, 429'da 60/120 sn bekleyip tekrar deneme eklendi.
+
+## K12 — Yıllık iddialar ayrı denetlenir; düşen ürüne "öne çıkar" denemez (19.11)
+
+- **Bulgu:** `llama3.1:8b` yanıtı tutarlılık kontrolünden ✅ geçti ama yanlıştı: geçen yıldan düşük olan Kazak ve
+  Palto için "geçen yılın aynı döneminden de yüksek" yazdı (istemdeki örnek cümleyi kopyaladı) ve geçen yıldan düşük
+  ürünler için "öne çıkarmayı destekleyebilir" dedi. Denetim dönemsel ve yıllık yönü ayırmıyordu.
+- **Karar:** Her aday satırına Python'un yazdığı ANLAMI ve YÖN eklendi; istemdeki örnek kaldırıldı. Denetim
+  "geçen yıl" ifadesini ayrıca yıllık yönle karşılaştırır; düşüş etiketli terime "öne çıkar" önerisi reddedilir.
+  Gerçek yanıt test olarak eklendi.
+
 ## K9 — Ayar dosyası şemayla doğrulanır (19.11)
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden

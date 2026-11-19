@@ -100,3 +100,38 @@ def test_end_to_end_with_yoy(cfg, tmp_path, monkeypatch):
     row = json.loads((run / "analysis.json").read_text(encoding="utf-8"))["rows"][0]
     assert row["pct_change"] == 100.0 and row["yoy_pct_change"] == 100.0
     assert row["trend_label"] == Trend.ABOVE_SEASON_UP
+
+
+def test_wikipedia_source_wide_drop_is_normalized(cfg, tmp_path, monkeypatch):
+    """19.11.2026 bulgusu: Vikipedi'nin toplam trafiği düşünce tüm makaleler 'düşüyor' görünür. Makale değeri proje
+    toplamına oranlanınca, payı değişmeyen terim için yıllık değişim ~0 olmalı."""
+    w = _w(cfg)
+    days = (w.end - w.ly_start).days + 1
+    art = wiki_body(w.ly_start, [200] * days)
+    tot = wiki_body(w.ly_start, [2_000_000] * days)
+    for body, low in ((art, 100), (tot, 1_000_000)):                   # bu yıl her şey yarıya iniyor
+        for item in body["items"]:
+            if item["timestamp"][:8] >= w.recent_start.strftime("%Y%m%d"):
+                item["views"] = low
+    main_days = (w.end - w.start).days + 1
+    sess = FakeSession({
+        f"aggregate/tr.wikipedia/all-access/user/daily/{w.ly_start:%Y%m%d}": FakeResponse(200, tot),
+        f"aggregate/tr.wikipedia/all-access/user/daily/{w.start:%Y%m%d}":
+            FakeResponse(200, wiki_body(w.start, [2_000_000] * 7 + [1_000_000] * (main_days - 7))),
+        f"Terim/daily/{w.start:%Y%m%d}": FakeResponse(200, wiki_body(w.start, [200] * 7 + [100] * (main_days - 7))),
+        f"Terim/daily/{w.ly_start:%Y%m%d}": FakeResponse(200, art),
+    })
+    cfg["sources"] = {"wikimedia": {"enabled": True, "project": "tr.wikipedia"}}
+    cfg["terms"] = [{"id": "t", "label": "Terim", "queries": {"wikimedia": "Terim"}}]
+    cfg["analysis"].update(low_volume={}, normalize_by_norm={"wikimedia": 1_000_000})
+    import trendpipe.sources as srcmod
+    orig = srcmod.build_sources
+    monkeypatch.setattr(cli, "build_sources", lambda c, only=None, user_agent="": orig(c, only, user_agent, sess))
+    p = tmp_path / "c.yaml"
+    p.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    assert cli.main(["all", "--config", str(p), "--out-dir", str(tmp_path / "r"), "--end", END.isoformat(),
+                     "--skip-llm"]) == 0
+    row = json.loads(next((tmp_path / "r").iterdir()).joinpath("analysis.json").read_text(encoding="utf-8"))["rows"][0]
+    assert row["pct_change"] == 0.0 and row["yoy_pct_change"] == 0.0                # ham olarak -%50 olurdu
+    assert row["trend_label"] == Trend.NO_CHANGE
+    assert any("toplamına oranlandı" in n for n in row["notes"])

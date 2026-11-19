@@ -39,8 +39,10 @@ Bir kaynak art arda N istekte 429 alırsa kalan istekler denenmez ve "Denenmedi"
 - **Google Trends 0 değeri:** Google'a göre "bu terim için yeterli veri yok" demektir → eksik sayılır
   (`analysis.zero_is_missing`).
 - **Vikipedi:** görüntülenmesi olmayan günü hiç döndürmez → eksik sayılır (temkinli yaklaşım).
-- **GDELT (kapalı):** ham haber sayısı o gün izlenen toplam habere oranlanır; izleme hacmi çok düşük günler bozuk
-  sayılır (`analysis.normalize_by_norm`).
+- **Kaynağın genel hacmi:** değer kaynağın o günkü toplamına oranlanır (`analysis.normalize_by_norm`):
+  Vikipedi'de projenin toplam insan görüntülemesine (milyonda), GDELT'te izlenen toplam habere (10.000'de).
+  Böylece kaynağın genel trafiğindeki değişim (ör. Vikipedi'nin yıllık trafik düşüşü) terim değişimi sanılmaz.
+  Toplamı çok düşük günler bozuk sayılıp çıkarılır.
 
 ## 3. Karşılaştırmalar
 
@@ -80,7 +82,8 @@ Düşük hacim, hesaplanamadı ve veri yok durumları etiket olarak aynen geçer
 3. Yanıt denetlenir (`trendpipe/checks.py`):
    - öne çıkanlar yalnızca aday listesinden mi; ürün önerileri yalnızca seçilen terimler için mi
    - hesaplanan sonuçlarda olmayan yüzde var mı
-   - hesaplanan yönle çelişen artış/düşüş iddiası var mı (dönemsel ya da yıllık)
+   - hesaplanan yönle çelişen artış/düşüş iddiası var mı; "geçen yıl" ifadeleri ayrıca yıllık yönle karşılaştırılır
+   - düşüş / geçen yıldan düşük etiketli terime "öne çıkar" önerisi var mı
    - verisi olan kaynak için "veri yok" ya da verisi olmayan kaynak kanıt olarak gösterilmiş mi
    - kaynaklar sayısal olarak karşılaştırılmış mı; satış/stok/ciro gibi veride olmayan metrik var mı; İngilizce kelime
 4. Sorun varsa sorunlar modele geri bildirilip **bir kez daha** yanıt istenir (öz-düzeltme). En az sorunlu yanıt

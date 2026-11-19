@@ -145,3 +145,55 @@ def test_markdown_excludes_non_candidates(monkeypatch):
                                              "window": W})
     section1 = md.split("## 1.")[1].split("## 2.")[0]
     assert "Hırka" not in section1 and "⚠️" in md and "aday listesinde yok" in md
+
+
+def _run5_rows():
+    """19.11.2026 17:34 yerel çalıştırmasının (Vikipedi normalizasyonundan önce) İngilizce Vikipedi sonuçları."""
+    def row(label, pct, d, ypct, yd, tl):
+        return {**W, "source": "wikimedia_en", "label": label, "fetch_status": "ok", "result": "computed",
+                "low_volume": False, "notes": [], "baseline_mean": 100.0, "recent_mean": 100.0,
+                "pct_change": pct, "direction": d, "signal": {"up": "strong_up", "flat": "flat"}[d],
+                "yoy_result": "computed", "yoy_ly_mean": 100.0, "yoy_recent_mean": 100.0, "yoy_pct_change": ypct,
+                "yoy_direction": yd, "yoy_signal": "x", "trend_label": tl}
+    return [row("Hırka", 25.7, "up", -8.8, "flat", Trend.SEASONAL_UP),
+            row("Kazak", 20.9, "up", -26.6, "down", Trend.SEASONAL_UP_WEAKER),
+            row("Palto", 16.1, "up", -29.8, "down", Trend.SEASONAL_UP_WEAKER),
+            row("Kot pantolon", 0.6, "flat", -62.4, "down", Trend.YEARLY_DOWN)]
+
+
+def test_real_run5_answer_is_caught():
+    """Gerçek llama3.1:8b yanıtı ✅ almıştı ama yanlıştı: yıllık düşüşe 'geçen yıldan yüksek' dedi ve geçen yıldan
+    düşük ürünlere 'öne çıkar' önerdi. Yeni denetim ikisini de yakalamalı."""
+    names = {"wikimedia_en": "İngilizce Vikipedi"}
+    data = {"ozet": "Bu sezon, mevsimsel artış gösteren ürünler öne çıkıyor.",
+            "one_cikanlar": [{"terim": t, "kaynak": "İngilizce Vikipedi",
+                              "neden_onemli": f"{t} son dönemde arttı ve geçen yılın aynı döneminden de yüksek."}
+                             for t in ("Hırka", "Kazak", "Palto")] +
+                            [{"terim": "Kot pantolon", "kaynak": "İngilizce Vikipedi",
+                              "neden_onemli": "Geçen yıla göre düşük (son dönemde sabit)."}],
+            "urun_katkisi": [{"terim": t, "oneri": "Öne çıkarmayı destekleyebilir."}
+                             for t in ("Hırka", "Kazak", "Palto", "Kot pantolon")],
+            "soyleyemediklerimiz": ["İngilizce Vikipedi dünya geneli ilgiyi gösterir."]}
+    issues = " | ".join(review(data, _run5_rows(), names)["issues"])
+    for t in ("Hırka", "Kazak", "Palto"):
+        assert f"'{t}' için 'geçen yıldan yüksek' iddiası" in issues
+    assert "'Kot pantolon' ilgisi düşüyor / geçen yıldan düşük olduğu halde 'öne çıkar'" in issues
+    assert "'Kazak' ilgisi düşüyor" not in issues          # dönemsel artış var, öneri serbest
+
+
+def test_correct_run5_answer_passes():
+    names = {"wikimedia_en": "İngilizce Vikipedi"}
+    data = {"ozet": "Hırka, kazak ve palto ilgisi son dört haftada arttı; bu artış mevsimsel.",
+            "one_cikanlar": [
+                {"terim": "Hırka", "kaynak": "İngilizce Vikipedi",
+                 "neden_onemli": "Son dönemde arttı, geçen yılın aynı dönemiyle benzer düzeyde; mevsimsel artış."},
+                {"terim": "Kazak", "kaynak": "İngilizce Vikipedi",
+                 "neden_onemli": "Son dönemde arttı ama geçen yılın aynı döneminden düşük."},
+                {"terim": "Kot pantolon", "kaynak": "İngilizce Vikipedi",
+                 "neden_onemli": "Son dönemde sabit, geçen yılın aynı döneminden düşük."}],
+            "urun_katkisi": [{"terim": "Hırka", "oneri": "Sezon ürünü olarak öne çıkarmayı destekleyebilir."},
+                             {"terim": "Kazak", "oneri": "Öne çıkarmayı destekleyebilir; ilgi geçen yıldan zayıf."},
+                             {"terim": "Kot pantolon", "oneri": "İlgi izlenmeli, öne çıkarmak için erken."}],
+            "soyleyemediklerimiz": ["Veriler satın alma niyetini göstermez."]}
+    rev = review(data, _run5_rows(), names)
+    assert rev["ok"], rev["issues"]

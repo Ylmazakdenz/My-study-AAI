@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 # Kaynak tipine özgü izin verilen ayarlar (ortak olanlar SourceCfg alanlarıdır)
 TYPE_KEYS: dict[str, set[str]] = {
-    "wikimedia": {"project", "access", "agent"},
+    "wikimedia": {"project", "access", "agent", "normalize_by_project"},
     "gdelt": {"source_country", "source_lang", "mode"},
     "google_trends": {"geo", "hl", "samples"},
 }
@@ -35,10 +35,16 @@ class WindowCfg(_Strict):
 
 
 class AnalysisCfg(_Strict):
+    @field_validator("normalize_by_norm", mode="before")
+    @classmethod
+    def _list_to_dict(cls, v):
+        return {k: 10_000 for k in v} if isinstance(v, list) else v
+
     min_coverage: float = Field(0.8, ge=0, le=1)
     flat_threshold_pct: float = Field(15, gt=0)
     min_window_days_ratio: float = Field(0.5, ge=0, le=1)
-    normalize_by_norm: list[str] = []
+    # kaynak -> oran birimi (ör. gdelt: 10000 = "10.000 haberde", wikimedia: 1000000 = "milyon görüntülemede")
+    normalize_by_norm: dict[str, float] = {}
     min_norm_ratio: float = Field(0.2, ge=0, le=1)
     zero_is_missing: list[str] = []
     low_volume: dict[str, float] = {}

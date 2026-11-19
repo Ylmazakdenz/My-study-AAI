@@ -45,11 +45,14 @@ veriliyor. Yanıtını YALNIZCA verilen JSON şemasına uygun, Türkçe olarak v
 KURALLAR:
 1. "one_cikanlar" içine YALNIZCA ADAY LİSTESİ'ndeki terim-kaynak çiftlerini yaz; terim ve kaynak adlarını listede
    yazıldığı gibi kopyala. Aday listesi boşsa "one_cikanlar" ve "urun_katkisi" boş liste olsun.
-2. "neden_onemli": adayın ETİKET'ini kendi cümlenle açıkla (ör. sezon üstü artış = son dönemde arttı ve geçen yılın
-   aynı döneminden de yüksek; mevsimsel artış = arttı ama geçen yılla benzer, mevsimin olağan artışı).
+2. "neden_onemli": adayın ANLAMI alanını kendi cümlenle yaz. ANLAMI'nda olmayan bir şey söyleme; özellikle geçen
+   yılla ilgili ifadeyi ANLAMI'nda yazdığı gibi kullan (geçen yıldan yüksek / benzer / düşük).
    Yeni sayı yazma; sayı yazacaksan yalnızca aday satırındaki yüzdeleri aynen kullan.
-3. "urun_katkisi": her öne çıkan terim için bir madde. İhtiyatlı yaz ("öne çıkarmayı destekleyebilir",
-   "izlenmeli"). Mevsimsel artışlarda bunun her yıl görülen bir artış olduğunu belirt.
+3. "urun_katkisi": her öne çıkan terim için bir madde, adayın YÖN alanına göre:
+   - YÖN "yükseliyor" ise ihtiyatlı öneri ("öne çıkarmayı destekleyebilir"); mevsimsel artışta bunun her yıl görülen
+     bir artış olduğunu belirt.
+   - YÖN "düşüyor" ya da "geçen yıldan düşük" ise "öne çıkar" DEME; "ilgi izlenmeli", "öne çıkarmak için erken"
+     gibi yaz.
 4. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
 5. Kaynakları birbiriyle sayısal olarak karşılaştırma; her kaynak farklı bir şey ölçer.
 6. "soyleyemediklerimiz": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz.
@@ -152,10 +155,37 @@ def evidence_line(r: dict, names: dict) -> str:
     return "- " + " ".join(parts)
 
 
+MEANING = {
+    Trend.ABOVE_SEASON_UP: "son 4 haftada önceki 4 haftaya göre arttı VE geçen yılın aynı döneminden yüksek",
+    Trend.SEASONAL_UP: "son 4 haftada arttı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel "
+                       "artış)",
+    Trend.SEASONAL_UP_WEAKER: "son 4 haftada arttı ama geçen yılın aynı döneminden DÜŞÜK (mevsimsel artış, geçen "
+                              "yıldan zayıf)",
+    Trend.UP_YOY_UNKNOWN: "son 4 haftada arttı; geçen yılla karşılaştırılamadı (mevsimsel olup olmadığı bilinmiyor)",
+    Trend.ABOVE_SEASON_DOWN: "son 4 haftada azaldı VE geçen yılın aynı döneminden düşük",
+    Trend.SEASONAL_DOWN: "son 4 haftada azaldı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel "
+                         "düşüş)",
+    Trend.SEASONAL_DOWN_STRONGER: "son 4 haftada azaldı ama geçen yılın aynı döneminden yüksek",
+    Trend.DOWN_YOY_UNKNOWN: "son 4 haftada azaldı; geçen yılla karşılaştırılamadı",
+    Trend.YEARLY_UP: "son 4 haftada belirgin değişim yok; geçen yılın aynı döneminden yüksek",
+    Trend.YEARLY_DOWN: "son 4 haftada belirgin değişim yok; geçen yılın aynı döneminden düşük",
+}
+UP_LABELS = {Trend.ABOVE_SEASON_UP, Trend.SEASONAL_UP, Trend.SEASONAL_UP_WEAKER, Trend.UP_YOY_UNKNOWN,
+             Trend.YEARLY_UP}
+DOWN_LABELS = CANDIDATE_LABELS - UP_LABELS
+
+
+def direction_tr(label: str) -> str:
+    if label == Trend.YEARLY_DOWN:
+        return "geçen yıldan düşük"
+    return "yükseliyor" if label in UP_LABELS else "düşüyor"
+
+
 def candidate_line(r: dict, names: dict) -> str:
     y = f", yıllık {_pct(r['yoy_pct_change'])}" if r.get("yoy_pct_change") is not None else ""
     return (f"- terim: {r['label']} | kaynak: {names.get(r['source'], r['source'])} | "
-            f"ETİKET: {TREND_TR[r['trend_label']]} | dönemsel {_pct(r.get('pct_change'))}{y}")
+            f"ETİKET: {TREND_TR[r['trend_label']]} | YÖN: {direction_tr(r['trend_label'])} | "
+            f"ANLAMI: {MEANING[r['trend_label']]} | dönemsel {_pct(r.get('pct_change'))}{y}")
 
 
 def limitations(rows: list[dict], names: dict) -> list[str]:

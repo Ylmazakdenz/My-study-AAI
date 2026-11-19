@@ -288,7 +288,8 @@ def classify_yoy(y: dict) -> str:
 def _prepare_series(manifest: dict, series: dict, a: dict, kind: str, window: Window
                     ) -> tuple[dict, dict, dict, dict]:
     """Seri ön işleme (kaynak bazında): Google 0 → eksik, GDELT oranlama, kaynak kesinti günleri."""
-    norm_sources = set(a.get("normalize_by_norm") or [])
+    nb = a.get("normalize_by_norm") or {}
+    norm_sources = {k: 10_000 for k in nb} if isinstance(nb, list) else dict(nb)
     zero_missing = set(a.get("zero_is_missing") or [])
     out = dict(series)
     gaps: dict[str, set[date]] = {}
@@ -304,10 +305,12 @@ def _prepare_series(manifest: dict, series: dict, a: dict, kind: str, window: Wi
                 zeros[(src, t)] = len(pts) - len(kept)
                 out[(src, t, kind)] = kept
         if src in norm_sources and ok_ids:
-            new, dropped = normalize_by_norm([out.get((src, t, kind), []) for t in ok_ids],
-                                             float(a.get("min_norm_ratio", 0.2)))
-            out.update({(src, t, kind): pts for t, pts in zip(ok_ids, new, strict=True)})
-            normalized[src] = dropped
+            series_list = [out.get((src, t, kind), []) for t in ok_ids]
+            if any(p.extra and p.extra.get("norm") for pts in series_list for p in pts):
+                new, dropped = normalize_by_norm(series_list, float(a.get("min_norm_ratio", 0.2)),
+                                                 per=float(norm_sources[src]))
+                out.update({(src, t, kind): pts for t, pts in zip(ok_ids, new, strict=True)})
+                normalized[src] = (dropped, float(norm_sources[src]))
         if kind == "main":
             gaps[src] = source_gap_days([out.get((src, t, kind), []) for t in ok_ids], window)
     return out, gaps, normalized, zeros
@@ -319,7 +322,7 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
     min_cov = float(a.get("min_coverage", 0.8))
     thr = float(a.get("flat_threshold_pct", 15))
     series, gaps, normalized, zeros = _prepare_series(manifest, series, a, "main", window)
-    series, _, _, yoy_zeros = _prepare_series(manifest, series, a, "yoy", window)
+    series, _, yoy_normalized, yoy_zeros = _prepare_series(manifest, series, a, "yoy", window)
     yoy_recs = {(r["source"], r["term_id"]): r for r in manifest["fetches"] if r.get("series") == "yoy"}
 
     rows = []
@@ -340,9 +343,13 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
                 stats["notes"].insert(0, f"{zeros[(src, tid)]} gün 0 değeri (kaynağa göre 'yeterli veri yok') "
                                          "eksik sayıldı, sıfır olarak hesaba katılmadı.")
             if src in normalized:
-                stats["metric"] = "articles_per_10k_monitored"
-                stats["notes"].insert(0, f"Değerler o gün izlenen toplam habere oranlandı (10.000 haberde); izleme "
-                                         f"hacmi çok düşük {normalized[src]} gün bozuk sayılıp çıkarıldı.")
+                dropped, per = normalized[src]
+                unit = f"{per:,.0f}".replace(",", ".")
+                stats["metric"] = f"per_{int(per)}_of_source_total"
+                stats["notes"].insert(0, f"Değerler kaynağın o günkü toplamına oranlandı ({unit} birimde) — kaynağın "
+                                         "genel hacmindeki değişim terim değişimi sanılmasın diye"
+                                         + (f"; toplamı çok düşük {dropped} gün bozuk sayılıp çıkarıldı."
+                                            if dropped else "."))
 
         # Yıllık karşılaştırma
         yrec = yoy_recs.get((src, tid))
@@ -354,6 +361,9 @@ def analyze_run(manifest: dict, series: dict, cfg: dict, window: Window) -> list
         else:
             y = analyze_yoy(series.get((src, tid, "yoy"), []), window, min_coverage=min_cov,
                             flat_threshold_pct=thr, low_volume=low.get(src))
+            if src in yoy_normalized:
+                y["yoy_notes"].insert(0, "Yıllık seri de kaynağın günlük toplamına oranlandı (kaynağın genel hacmi "
+                                         "yıldan yıla değişebilir).")
             if yoy_zeros.get((src, tid)):
                 y["yoy_notes"].insert(0, f"Yıllık seride {yoy_zeros[(src, tid)]} nokta 0 (yeterli veri yok), "
                                          "eksik sayıldı.")

@@ -5,8 +5,9 @@ Tasarım (gerçek denemelerden çıkan ders):
   karşılaştırdı, "satış artışı" uydurdu). Bu yüzden model artık JSON şemasına uyan yanıt verir; Python yanıtı
   alan alan doğrular ve markdown'ı kendisi oluşturur.
 - Model YALNIZCA Python'un aday listesinden terim seçebilir; sayılar ve dönemler Python'dan gelir.
-- Model 4 soruyu yanıtlar: öne çıkanlar + neden (1), ürün katkısı (3), söyleyemediklerimiz (4) ve kısa özet.
-  2. sorunun (ölçüm ve dönem) sayısal kanıtı her seçilen terim için Python tarafından eklenir.
+- Model görev belgesindeki 4 soruyu yanıtlar: öne çıkanlar + neden (1), destekleyen ölçüm ve dönem (2, "dayanak"),
+  ürün seçimine katkı (3), söyleyemediklerimiz (4) ve kısa özet. 2. sorunun yanıtındaki yüzde ve tarihler denetlenir;
+  raporda yanına Python'un hesapladığı kanıt satırı da eklenir.
 """
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ RESPONSE_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {"terim": {"type": "string"}, "kaynak": {"type": "string"},
-                               "neden_onemli": {"type": "string"}},
-                "required": ["terim", "kaynak", "neden_onemli"],
+                               "neden_onemli": {"type": "string"}, "dayanak": {"type": "string"}},
+                "required": ["terim", "kaynak", "neden_onemli", "dayanak"],
             },
         },
         "urun_katkisi": {
@@ -47,15 +48,18 @@ KURALLAR:
 2. "neden_onemli": adayın ANLAMI alanını kendi cümlenle yaz. ANLAMI'nda olmayan bir şey söyleme; özellikle geçen
    yılla ilgili ifadeyi ANLAMI'nda yazdığı gibi kullan (geçen yıldan yüksek / benzer / düşük).
    Yeni sayı yazma; sayı yazacaksan yalnızca aday satırındaki yüzdeleri aynen kullan.
-3. "urun_katkisi": her öne çıkan terim için bir madde, adayın YÖN alanına göre:
+3. "dayanak" (destekleyen ölçüm ve dönem): kaynağı, karşılaştırılan dönemleri (tarihleriyle) ve yüzde değişimi
+   yaz. Yalnızca aday satırındaki yüzdeleri ve yukarıda verilen dönem tarihlerini aynen kullan.
+4. "urun_katkisi": her öne çıkan terim için bir madde, adayın YÖN alanına göre:
    - YÖN "yükseliyor" ise ihtiyatlı öneri ("öne çıkarmayı destekleyebilir"); mevsimsel artışta bunun her yıl görülen
      bir artış olduğunu belirt.
    - YÖN "düşüyor" ya da "geçen yıldan düşük" ise "öne çıkar" DEME; "ilgi izlenmeli", "öne çıkarmak için erken"
      gibi yaz.
-4. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
-5. Kaynakları birbiriyle sayısal olarak karşılaştırma; her kaynak farklı bir şey ölçer.
-6. "soyleyemediklerimiz": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz.
-7. "ozet": en fazla 2 cümle. Tamamen Türkçe yaz; İngilizce kelime kullanma.
+5. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
+6. Kaynakları birbiriyle sayısal olarak karşılaştırma; her kaynak farklı bir şey ölçer.
+7. "soyleyemediklerimiz": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz. Veri yetersizse
+   bunu açıkça yaz.
+8. "ozet": en fazla 2 cümle. Tamamen Türkçe yaz; İngilizce kelime kullanma.
 """
 
 TREND_TR = {

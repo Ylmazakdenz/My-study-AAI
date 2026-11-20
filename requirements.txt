@@ -1,3 +1,14 @@
-# Bağımlılıklar pyproject.toml'da tanımlıdır. Bu dosya projeyi (ve `trendpipe` komutunu) kurar:
-#   pip install -r requirements.txt
+# Bağımlılık listesi (pyproject.toml ile aynı; tests/test_packaging.py ikisinin uyumunu denetler)
+#   pip install -r requirements.txt     -> bağımlılıkları ve projeyi (`trendpipe` komutu) kurar
+# Testlerin geçtiği tam sürümler: requirements-lock.txt
+requests>=2.31,<3
+PyYAML>=6.0,<7
+python-dotenv>=1.0,<2
+pydantic>=2.5,<3
+ollama>=0.4,<1
+pytrends>=4.9.2,<5
+pandas>=2.0,<4
+tzdata; platform_system == 'Windows'
+
+# proje (trendpipe paketi ve komutu)
 -e .

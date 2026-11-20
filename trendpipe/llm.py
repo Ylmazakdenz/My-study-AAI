@@ -101,7 +101,7 @@ def interpret(rows: list[dict], context: dict, settings: dict, max_attempts: int
             break
         total += out["elapsed_sec"]
         data = _parse(out["content"])
-        rev = review(data, rows, names) if data is not None else \
+        rev = review(data, rows, names, context.get("window")) if data is not None else \
             {"ok": False, "issues": ["Yanıt geçerli JSON değil."], "structural_issues": ["JSON değil"],
              "unmatched_percentages": [], "note": "Yanıt geçerli JSON değil."}
         attempts.append({"attempt": i + 1, "raw": out["content"], "data": data, "review": rev,
@@ -179,8 +179,18 @@ def render_markdown(result: dict, rows: list[dict], names: dict, meta: dict) -> 
         lines.append("- Güvenilir bir değişim gösteren terim yok." if not candidates(rows) else
                      "- Model öne çıkan terim seçmedi.")
 
-    lines += ["", "## 2. Destekleyen ölçüm ve dönem", "", "*(Sayılar Python tarafından hesaplanmıştır.)*", ""]
-    lines += [evidence_line(r, names) for r in chosen] or ["- Öne çıkan terim olmadığı için kanıt satırı yok."]
+    lines += ["", "## 2. Destekleyen ölçüm ve dönem", ""]
+    model_dayanak = {}
+    for it in data.get("one_cikanlar", []):
+        if isinstance(it, dict):
+            src = alias.get(_norm(str(it.get("kaynak", ""))), it.get("kaynak"))
+            model_dayanak[(_norm(str(it.get("terim", ""))), src)] = it.get("dayanak")
+    for r in chosen:
+        lines.append(f"- **{r['label']}** ({names.get(r['source'], r['source'])}): "
+                     f"{model_dayanak.get((_norm(r['label']), r['source'])) or '(model yazmadı)'}")
+        lines.append("  - *Python hesabı:* " + evidence_line(r, names)[2:])
+    if not chosen:
+        lines.append("- Öne çıkan terim olmadığı için kanıt satırı yok.")
 
     lines += ["", "## 3. Ürün seçimine olası katkı", ""]
     lines += [f"- **{it.get('terim')}**: {it.get('oneri')}" for it in data.get("urun_katkisi", [])

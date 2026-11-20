@@ -52,7 +52,8 @@ ajanlar (ürün eşleştirme, içerik) bu dosyaları girdi olarak kullanır; ala
 ## interpretation.json / interpretation.md — model yorumu
 
 `interpretation.json`: `model`, `temperature`, `environment`, `review` (denetim sonucu ve sorunlar),
-`chosen_attempt`, `response` (modelin JSON yanıtı), `attempts[]` (her denemenin ham yanıtı ve denetimi), `prompt`.
+`chosen_attempt`, `response` (modelin JSON yanıtı: `ozet`, `one_cikanlar[]` = `terim`, `kaynak`, `neden_onemli`,
+`dayanak`; `urun_katkisi[]`; `soyleyemediklerimiz[]`), `attempts[]` (her denemenin ham yanıtı ve denetimi), `prompt`.
 `interpretation.md`: Python'un oluşturduğu rapor (özet, 4 bölüm, sistem notları, tüm sonuçlar tablosu).
 
 ## run.log

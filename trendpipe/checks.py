@@ -214,7 +214,7 @@ def validate_structured(data, rows: list[dict], names: dict) -> list[str]:
     label_of = {(_norm(r["label"]), r["source"]): r.get("trend_label") for r in rows}
     for item in data["one_cikanlar"]:
         if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("terim", "kaynak",
-                                                                                          "neden_onemli")):
+                                                                                          "neden_onemli", "dayanak")):
             issues.append("'one_cikanlar' içinde şemaya uymayan öğe var.")
             continue
         src = alias.get(_norm(item["kaynak"]))
@@ -247,6 +247,9 @@ def structured_as_text(data: dict) -> str:
     lines = ["## 1. Öne çıkanlar", f"- {data.get('ozet', '')}"]
     lines += [f"- {i.get('terim')} ({i.get('kaynak')}): {i.get('neden_onemli')}"
               for i in data.get("one_cikanlar", []) if isinstance(i, dict)]
+    lines += ["## 2. Destekleyen ölçüm ve dönem"]
+    lines += [f"- {i.get('terim')} ({i.get('kaynak')}): {i.get('dayanak')}"
+              for i in data.get("one_cikanlar", []) if isinstance(i, dict) and i.get("dayanak")]
     lines += ["## 3. Ürün katkısı"]
     lines += [f"- {i.get('terim')}: {i.get('oneri')}" for i in data.get("urun_katkisi", []) if isinstance(i, dict)]
     lines += ["## 4. Söyleyemediklerimiz"]
@@ -254,12 +257,30 @@ def structured_as_text(data: dict) -> str:
     return "\n".join(lines)
 
 
-def review(data, rows: list[dict], names: dict) -> dict:
-    """Tam denetim: şema/aday kuralları + metin denetimi."""
+_DATE = re.compile(r"\b(\d{1,2})[./](\d{1,2})[./](\d{4})\b")
+
+
+def check_dates(text: str, window: dict | None) -> list[str]:
+    """Yanıttaki tarihler (gg.aa.yyyy) analiz dönemlerinin sınır tarihlerinden biri olmalı."""
+    if not window:
+        return []
+    allowed = {v for v in window.values() if isinstance(v, str)}
+    bad = []
+    for m in _DATE.finditer(text):
+        iso = f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+        if iso not in allowed:
+            bad.append(m.group(0))
+    return [f"Analiz dönemlerinde olmayan tarih(ler): {', '.join(sorted(set(bad)))}"] if bad else []
+
+
+def review(data, rows: list[dict], names: dict, window: dict | None = None) -> dict:
+    """Tam denetim: şema/aday kuralları + metin denetimi (+ verilirse tarih denetimi)."""
     structural = validate_structured(data, rows, names)
     text_check = check_output(structured_as_text(data), rows) if isinstance(data, dict) else \
         {"percentages_found": [], "unmatched_percentages": [], "claim_issues": []}
     issues = structural + text_check.get("claim_issues", [])
+    if isinstance(data, dict):
+        issues += check_dates(structured_as_text(data), window)
     if text_check.get("unmatched_percentages"):
         issues.append("Hesaplanan sonuçlarda olmayan yüzdeler: "
                       + ", ".join(f"%{v:g}" for v in text_check["unmatched_percentages"]))

@@ -131,6 +131,20 @@ Tüm modüller baştan sona okunarak denetlendi; bulunan sorunlar düzeltildi ve
 | Testler | Tek dosyada 30+ karışık test | Konulara göre dosyalar (analiz, kaynaklar, denetim, CLI, önbellek, gürültü…) |
 | Çıktı sözleşmesi | Belgelenmemişti | [ciktilar.md](ciktilar.md): sonraki ajanların girdi biçimi |
 
+## K16 — Görev belgesine birebir uyum denetimi (20.11)
+
+Görev belgesi teslimat açısından satır satır yeniden karşılaştırıldı:
+
+| Belgedeki istek | Önce | Sonra |
+|---|---|---|
+| "Modelden şu soruları cevaplamasını iste" (4 soru) | 2. soruyu (ölçüm ve dönem) Python yazıyordu | Model 4 soruyu da yanıtlar; 2. yanıttaki yüzde ve tarihler denetlenir, yanına Python'un hesabı eklenir |
+| "Kurulum, model adı ve bağlantı ayarlarını README'ye yaz" | `docs/`'a taşınmıştı | README "Model bağlantısı" |
+| "README'ye kısa bir tablo ekle" (6 konu, kanıt: resmi bağlantı + tarih) | `docs/`'taydı; README'de kanıt sütunu yoktu | README'de belgedeki sütunlarla, kanıt bağlantılarıyla |
+| "Denediğin işlemi, aldığın hatayı ve çözüm önerini paylaş" | Kararlar belgesine dağınık | README "Karşılaşılan engeller" (denenen işlem / hata / çözüm) |
+| Ortak kararlar (hocanın kurulumu, model, kaynaklar) | Sapmalar `docs/`'ta | README "Ortak kararlardan farklı yapılanlar (onayın gerekiyor)" |
+| "Bağımlılık listesi" | `requirements.txt` yalnız `-e .` | Paketler açıkça listelenir; pyproject ile uyum testle denetlenir |
+| "Yapay zekâdan alınmış plan değil" | README'de "Sonraki aşamaya köprü" planı | Kaldırıldı |
+
 ## K9 — Ayar dosyası şemayla doğrulanır (19.11)
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden

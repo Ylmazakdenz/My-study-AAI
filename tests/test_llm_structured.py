@@ -14,6 +14,7 @@ from trendpipe.llm import _parse, interpret, render_markdown
 
 W = {"baseline_start": "2026-09-23", "baseline_end": "2026-10-20", "recent_start": "2026-10-21",
      "recent_end": "2026-11-17", "ly_start": "2025-10-22", "ly_end": "2025-11-18"}
+D = "Dönemsel ve yıllık karşılaştırma."  # yüzde/tarih içermeyen geçerli dayanak
 NAMES = {"google_trends": "Google Trends", "wikimedia_en": "İngilizce Vikipedi"}
 
 
@@ -33,7 +34,7 @@ def _rows():
 
 GOOD = {"ozet": "Palto aramaları geçen yılın da üzerinde.",
         "one_cikanlar": [{"terim": "Palto", "kaynak": "Google Trends",
-                          "neden_onemli": "Son dönemde arttı ve geçen yılın aynı döneminden de yüksek (%+50)."}],
+                          "dayanak": D, "neden_onemli": "Son dönemde arttı ve geçen yılın aynı döneminden de yüksek (%+50)."}],
         "urun_katkisi": [{"terim": "Palto", "oneri": "Palto modellerini öne çıkarmayı destekleyebilir."}],
         "soyleyemediklerimiz": ["Veriler arama ilgisini ölçer; satın alma niyetini göstermez."]}
 
@@ -90,7 +91,7 @@ def _ctx():
 
 
 def test_self_correction_loop(monkeypatch):
-    bad = {**GOOD, "one_cikanlar": [{"terim": "Hırka", "kaynak": "Google Trends", "neden_onemli": "arttı"}],
+    bad = {**GOOD, "one_cikanlar": [{"terim": "Hırka", "kaynak": "Google Trends", "dayanak": D, "neden_onemli": "arttı"}],
            "urun_katkisi": []}
     calls = _fake_ollama(monkeypatch, [json.dumps(bad, ensure_ascii=False), json.dumps(GOOD, ensure_ascii=False)])
     out = interpret(_rows(), _ctx(), {"host": "h", "model": "m"})
@@ -130,13 +131,13 @@ def test_multi_term_sentence_checked_per_clause():
 
 def test_text_checks_run_even_with_schema_errors():
     data = {**GOOD, "ozet": "Satışlar artacak.",
-            "one_cikanlar": [{"terim": "Hırka", "kaynak": "Google Trends", "neden_onemli": "x"}], "urun_katkisi": []}
+            "one_cikanlar": [{"terim": "Hırka", "kaynak": "Google Trends", "dayanak": D, "neden_onemli": "x"}], "urun_katkisi": []}
     issues = " ".join(review(data, _rows(), NAMES)["issues"])
     assert "aday listesinde yok" in issues and "iş metriklerinden" in issues
 
 
 def test_markdown_excludes_non_candidates(monkeypatch):
-    bad = {**GOOD, "one_cikanlar": [{"terim": "Hırka", "kaynak": "Google Trends", "neden_onemli": "x"}],
+    bad = {**GOOD, "one_cikanlar": [{"terim": "Hırka", "kaynak": "Google Trends", "dayanak": D, "neden_onemli": "x"}],
            "urun_katkisi": [{"terim": "Hırka", "oneri": "y"}]}
     _fake_ollama(monkeypatch, [json.dumps(bad, ensure_ascii=False)] * 2)
     rows = _rows()
@@ -167,10 +168,10 @@ def test_real_run5_answer_is_caught():
     names = {"wikimedia_en": "İngilizce Vikipedi"}
     data = {"ozet": "Bu sezon, mevsimsel artış gösteren ürünler öne çıkıyor.",
             "one_cikanlar": [{"terim": t, "kaynak": "İngilizce Vikipedi",
-                              "neden_onemli": f"{t} son dönemde arttı ve geçen yılın aynı döneminden de yüksek."}
+                              "dayanak": D, "neden_onemli": f"{t} son dönemde arttı ve geçen yılın aynı döneminden de yüksek."}
                              for t in ("Hırka", "Kazak", "Palto")] +
                             [{"terim": "Kot pantolon", "kaynak": "İngilizce Vikipedi",
-                              "neden_onemli": "Geçen yıla göre düşük (son dönemde sabit)."}],
+                              "dayanak": D, "neden_onemli": "Geçen yıla göre düşük (son dönemde sabit)."}],
             "urun_katkisi": [{"terim": t, "oneri": "Öne çıkarmayı destekleyebilir."}
                              for t in ("Hırka", "Kazak", "Palto", "Kot pantolon")],
             "soyleyemediklerimiz": ["İngilizce Vikipedi dünya geneli ilgiyi gösterir."]}
@@ -186,11 +187,11 @@ def test_correct_run5_answer_passes():
     data = {"ozet": "Hırka, kazak ve palto ilgisi son dört haftada arttı; bu artış mevsimsel.",
             "one_cikanlar": [
                 {"terim": "Hırka", "kaynak": "İngilizce Vikipedi",
-                 "neden_onemli": "Son dönemde arttı, geçen yılın aynı dönemiyle benzer düzeyde; mevsimsel artış."},
+                 "dayanak": D, "neden_onemli": "Son dönemde arttı, geçen yılın aynı dönemiyle benzer düzeyde; mevsimsel artış."},
                 {"terim": "Kazak", "kaynak": "İngilizce Vikipedi",
-                 "neden_onemli": "Son dönemde arttı ama geçen yılın aynı döneminden düşük."},
+                 "dayanak": D, "neden_onemli": "Son dönemde arttı ama geçen yılın aynı döneminden düşük."},
                 {"terim": "Kot pantolon", "kaynak": "İngilizce Vikipedi",
-                 "neden_onemli": "Son dönemde sabit, geçen yılın aynı döneminden düşük."}],
+                 "dayanak": D, "neden_onemli": "Son dönemde sabit, geçen yılın aynı döneminden düşük."}],
             "urun_katkisi": [{"terim": "Hırka", "oneri": "Sezon ürünü olarak öne çıkarmayı destekleyebilir."},
                              {"terim": "Kazak", "oneri": "Öne çıkarmayı destekleyebilir; ilgi geçen yıldan zayıf."},
                              {"terim": "Kot pantolon", "oneri": "İlgi izlenmeli, öne çıkarmak için erken."}],
@@ -233,3 +234,34 @@ def test_second_model_call_failure_keeps_first_attempt(monkeypatch):
     out = interpret(_rows(), _ctx(), {"host": "h", "model": "m"})
     assert len(out["attempts"]) == 1 and out["chosen_attempt"] == 1 and not out["review"]["ok"]
     assert LLMError
+
+
+# ---------- 2. soru: "Bunu destekleyen ölçüm ve dönem ne?" (görev belgesi) modelce yanıtlanır ----------
+
+def test_question2_answer_required_and_checked():
+    data = json.loads(json.dumps(GOOD))
+    data["one_cikanlar"][0]["dayanak"] = ("Google Trends: 23.09.2026–20.10.2026 ile 21.10.2026–17.11.2026 "
+                                          "karşılaştırıldı, %+65,3; geçen yılın aynı dönemine göre %+50,0.")
+    assert review(data, _rows(), NAMES, W)["ok"]
+    wrong_date = json.loads(json.dumps(data))
+    wrong_date["one_cikanlar"][0]["dayanak"] = "Google Trends: 01.10.2026–15.11.2026 döneminde %+65,3."
+    assert "Analiz dönemlerinde olmayan tarih" in " ".join(review(wrong_date, _rows(), NAMES, W)["issues"])
+    wrong_pct = json.loads(json.dumps(data))
+    wrong_pct["one_cikanlar"][0]["dayanak"] = "Google Trends: 21.10.2026–17.11.2026 döneminde %+90."
+    assert "olmayan yüzdeler" in " ".join(review(wrong_pct, _rows(), NAMES, W)["issues"])
+    missing = json.loads(json.dumps(data))
+    missing["one_cikanlar"][0].pop("dayanak")
+    assert "şemaya uymayan" in " ".join(review(missing, _rows(), NAMES, W)["issues"])
+
+
+def test_report_section2_shows_model_answer_and_python_check(monkeypatch):
+    data = json.loads(json.dumps(GOOD))
+    data["one_cikanlar"][0]["dayanak"] = "Google Trends, 21.10.2026–17.11.2026: %+65,3."
+    _fake_ollama(monkeypatch, [json.dumps(data, ensure_ascii=False)])
+    rows = _rows()
+    out = interpret(rows, _ctx(), {"host": "h", "model": "m"})
+    md = render_markdown(out, rows, NAMES, {"model": "m", "temperature": 0.2, "created_at": "t", "run_id": "r",
+                                             "window": W})
+    sec2 = md.split("## 2.")[1].split("## 3.")[0]
+    assert "Google Trends, 21.10.2026–17.11.2026: %+65,3." in sec2          # modelin yanıtı
+    assert "*Python hesabı:*" in sec2 and "35,5 (23.09.2026–20.10.2026) → 58,8" in sec2

@@ -85,16 +85,42 @@ kurulumu için `zstd` paketi eklendi).
 
 ## Veri kaynakları (kısa karşılaştırma)
 
-Kontrol: 19.11.2026, resmi belgeler. Ayrıntı, bağlantılar ve gerçek denemelere göre seçim: [docs/kaynaklar.md](docs/kaynaklar.md).
+Aday kaynaklar güncel resmi belgelerden kontrol edildi (kontrol tarihi: **19.11.2026**). Seçilenler gerçek istekle
+denendi. Ayrıntı ve gerçek deneme sonuçları: [docs/kaynaklar.md](docs/kaynaklar.md).
 
-| Kaynak | Verinin anlamı | Otomatik erişim | Gereksinim | Kapsam (TR / dönem) | Giyime katkı | Durum |
-|---|---|---|---|---|---|---|
-| Google Trends | Google arama ilgisi (0-100, göreli) | Resmi API kapalı alfa; `pytrends` (resmi değil) | Alfa başvurusu; pytrends anahtarsız, hız sınırlı | TR var; geçmiş dönem | Ürün/stil arama ilgisi — en güçlü sinyal | **Ana kaynak** (6/6 gerçek istek) |
-| Wikimedia | Vikipedi makale görüntülemesi | Resmi REST API | Anahtar yok; User-Agent zorunlu | tr + en; 2015'ten beri günlük | Ürün tipine bilgi merakı | **Yedek** (TR hacmi çok düşük; EN dünya geneli) |
-| GDELT | Haberlerde geçme sayısı | Resmi uç nokta | Anahtar yok; sık 429 | TR haberleri; son ~1 yıl | Moda gündemi | **Kapalı** (4 denemede veri alınamadı) |
-| Pinterest Trends | Pinterest arama hacmi | Resmi API | İşletme hesabı + onay | TR doğrulanamadı; yalnız bugün | Stil keşfi; terim sorgulanamaz | Seçilmedi |
-| YouTube Data API | Video izlenme toplamları | Resmi API | Ücretsiz anahtar, günlük kota | `regionCode=TR`; geçmiş seri yok | Video ilgisi; zaman serisi yok | Seçilmedi |
-| Reddit | Gönderi/yorum | Resmi API (OAuth) | Ön onay; yeni başvurular kapanıyor (ikincil kaynak) | TR kapsamı zayıf | Düşük | Seçilmedi |
+| Kaynak | Verinin anlamı | Otomatik erişim | Gereksinimler | Kapsam (Türkiye / tarih aralığı) | Projeye katkı | Kanıt (resmi belge, 19.11.2026) | Durum |
+|---|---|---|---|---|---|---|---|
+| Google Trends | Arama ilgisi (0-100, göreli) | Resmi API kapalı alfa; `pytrends` (resmi değil) | Alfa için başvuru; pytrends anahtarsız ama hız sınırlı | TR var; geçmiş dönem sorgulanabilir | Ürün/stil arama ilgisi — en güçlü sinyal | [Trends API alfa](https://developers.google.com/search/apis/trends) | **Ana kaynak** — gerçek istekle 6/6 |
+| Wikimedia | Vikipedi sayfa görüntüleme (bilgi merakı) | Resmi REST API | Anahtar yok; User-Agent zorunlu | tr + en Vikipedi; 2015'ten bugüne günlük | Ürün tipine merak; Türkçe hacim çok düşük, İngilizce dünya geneli | [Analytics API](https://doc.wikimedia.org/analytics-api/) | **Yedek** — gerçek istekle 12/12 |
+| GDELT | Haber görünürlüğü (haber sayısı) | Resmi uç nokta | Anahtar yok; sık istek engellenir | TR kaynaklı Türkçe haberler; son ~1 yıl | Moda gündemi | [DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/) | **Kapalı** — 4 denemede karşılaştırılabilir veri yok |
+| Pinterest Trends | Pinterest arama hacmi | Resmi API | İşletme hesabı + uygulama onayı | TR doğrulanamadı; yalnız bugünün verisi | Stil keşfi; ama terim sorgulanamıyor | [Trends API](https://developers.pinterest.com/docs/analytics-and-reports/trends/) | Seçilmedi (onay) |
+| YouTube Data API | Video izlenme/beğeni toplamları | Resmi API | Ücretsiz anahtar; günlük kota | `regionCode=TR`; geçmiş seri yok | Video ilgisi; zaman serisi yok | [videos.list](https://developers.google.com/youtube/v3/docs/videos/list) | Seçilmedi (tek seferlik toplam) |
+| Reddit | Gönderi ve yorumlar | Resmi API (OAuth) | Ön onay; ticari kullanım sözleşmeli | TR kapsamı zayıf | Düşük | [Data API Terms](https://www.redditinc.com/policies/data-api-terms) | Seçilmedi (onay) |
+
+Neden Google Trends ana kaynak: Türkiye'deki aramaları doğrudan ölçen tek kaynak; ilk çalışan kaynak Wikimedia idi
+ama Türkçe Vikipedi'nin hacmi anlamlı sonuç için çok düşük, İngilizce Vikipedi ise Türkiye'yi temsil etmiyor.
+
+## Karşılaşılan engeller
+
+| Denenen işlem | Alınan hata | Çözüm |
+|---|---|---|
+| Hocanın Colab kodu: `curl -fsSL https://ollama.com/install.sh \| sh` | `ERROR: This version requires zstd for extraction` | Kuruluma `zstd` paketi eklendi (`notebooks/colab_run.ipynb`) |
+| GDELT'ten veri çekme (Colab ve ev interneti) | `ReadTimeout`, `HTTP 429: Please limit requests to one every 5 seconds`; gelen veride 17 gün eksik | Zaman aşımı, bekleme ve tekrar deneme eklendi; eksik günler GDELT'in kendi kesintisi olduğu için sıfır sayılmadı; 4 denemede de karşılaştırılabilir veri alınamayınca kapatıldı |
+| GDELT ham haber sayısıyla karşılaştırma | Tüm terimler %35–75 "düşüyordu" | GDELT'in izlediği toplam haber sayısı yarıya inmişti; değerler toplam habere oranlandı |
+| Google Trends, aynı gün art arda çalıştırma | `TooManyRequestsError ... code 429` | İstekler arası 15 sn, 429'da 60/120 sn bekleyip tekrar; aynı veri 24 saat önbellekten; art arda 429'da kalan terimler denenmez |
+| Google Trends "kaşe kaban" | Bazı günler `0` | Google'a göre 0 = "yeterli veri yok"; sıfır değil eksik sayıldı |
+| Vikipedi geçen yılla karşılaştırma | Tüm makaleler geçen yıla göre %27–62 düşük | Vikipedi'nin genel trafiği düşmüş; değerler projenin toplam trafiğine oranlandı |
+| Model yorumu (`llama3.2`, sonra `llama3.1:8b`) | Belirgin değişimi olmayan terime "artıyor", veride olmayan "satış artışı", Türkçe-İngilizce karışık, geçen yıldan düşük ürüne "öne çıkar" | `llama3.1:8b`; model JSON şemasıyla yanıt veriyor, yanıt hesaplanan sonuçlarla otomatik denetleniyor, sorun varsa model bir kez daha yanıtlıyor; ayrıntı: [docs/kararlar.md](docs/kararlar.md) |
+
+## Ortak kararlardan farklı yapılanlar (onayın gerekiyor)
+
+| Ortak karar | Yapılan | Gerekçe |
+|---|---|---|
+| Hocanın Ollama kurulum kodu ve bağlantı yöntemi | Bağlantı yöntemi aynı (`ollama` paketi). Kurulum Colab yerine yerel Ollama uygulaması; hocanın Colab kurulumu `notebooks/colab_run.ipynb`'de çalışır halde duruyor | Google Trends yalnızca yerel bağlantıdan çalıştı; Colab oturumu her seferinde sıfırlanıyor |
+| Model (hocanın kodunda `llama3.2`) | `llama3.1:8b` | 3B model yorumda hata yaptı; hocanın notebook'u 8B'yi de öneriyor. `.env`'de tek satırla değiştirilebilir |
+| Güçlü yerel GPU varsaymıyoruz | GPU şart değil: 8B model GPU'suz bilgisayarda da çalışır ama yavaştır; zayıf bilgisayarda `OLLAMA_MODEL=llama3.2` ya da Colab | — |
+| Aday kaynaklar | Ana kaynak resmi olmayan `pytrends` ile Google Trends; GDELT kapalı | Yukarıdaki tablo; kalıcı çözüm için resmi Google Trends API alfa başvurusu önerilir |
+| Repo | Kod şu an kişisel repoda (`Ylmazakdenz/My-study-AAI`) | Takım reposu kurulunca taşınacak; değişecek yerler: `notebooks/colab_run.ipynb` (`REPO`), `trendpipe/config.py` (`PROJECT_URL`) |
 
 ## Çıktılar
 
@@ -108,8 +134,10 @@ data/runs/<YYYYMMDD-HHMMSS>/
 └── interpretation.json/.md  # model yanıtı, denetim sonucu, rapor
 ```
 
-Örnek rapor bölümleri: özet · 1. öne çıkan terimler · 2. destekleyen ölçüm ve dönem (Python) · 3. ürün seçimine
-katkı · 4. söyleyemediklerimiz · ek: tüm sonuçlar tablosu (Python).
+Model yorumu görev belgesindeki dört soruyu yanıtlar: 1. öne çıkan terim/konu · 2. destekleyen ölçüm ve dönem ·
+3. giyim mağazasının ürün seçimine katkısı · 4. bu veriyle söyleyemediklerimiz (+ kısa özet). Hesaplamaları Python
+yapar; modelin yanıtındaki terim, yüzde ve tarihler hesaplanan sonuçlarla otomatik denetlenir. Raporda 2. sorunun
+yanına Python'un hesabı, sonuna tüm sonuçların tablosu eklenir.
 
 ## Belgeler
 
@@ -155,13 +183,3 @@ ruff check trendpipe tests   # kod denetimi
 - Gerçek çalıştırmada bulunan her hata için önce o durumu yeniden üreten bir test yazılır
   (`tests/test_checks.py`, `tests/test_robustness.py` örnekleri).
 - Kararlar gerekçe ve kanıtıyla `docs/kararlar.md`'ye eklenir.
-
-## Sonraki aşamaya köprü
-
-| Ders bileşeni | Bu katmandaki karşılığı |
-|---|---|
-| API | Google Trends, Wikimedia (gerçek veri) |
-| LLM | Ollama, JSON şemalı yanıt |
-| MCP | `pipeline.fetch_run` / `analyze_dir` ve kaynak adaptörleri araç olarak açılmaya hazır |
-| Değerlendirme / güvenlik | `checks.review` + öz-düzeltme döngüsü |
-| RAG, LangGraph | henüz yok (sonraki aşama: marka kataloğu, ajan grafiği) |

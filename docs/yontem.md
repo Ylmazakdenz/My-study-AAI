@@ -98,19 +98,19 @@ Düşük hacim, hesaplanamadı ve veri yok durumları etiket olarak aynen geçer
 ## 5. Model yorumu
 
 1. Python, **aday listesini** (güvenilir sinyali olan terim-kaynak çiftleri), kanıtları ve sınırları hazırlar.
-2. Model (Ollama), bir **JSON şemasına** uyan yanıt verir: öne çıkanlar + neden, ürün katkısı,
-   söyleyemediklerimiz, özet.
+2. Model (Ollama), bir **JSON şemasına** uyan yanıtla görev belgesindeki dört soruyu yanıtlar: öne çıkanlar + neden
+   (1), destekleyen ölçüm ve dönem — `dayanak` (2), ürün seçimine katkı (3), söyleyemediklerimiz (4); ayrıca kısa özet.
 3. Yanıt denetlenir (`trendpipe/checks.py`):
    - öne çıkanlar yalnızca aday listesinden mi; ürün önerileri yalnızca seçilen terimler için mi
-   - hesaplanan sonuçlarda olmayan yüzde var mı
+   - hesaplanan sonuçlarda olmayan yüzde ya da analiz dönemlerinde olmayan tarih var mı
    - hesaplanan yönle çelişen artış/düşüş iddiası var mı; "geçen yıl" ifadeleri ayrıca yıllık yönle karşılaştırılır
    - düşüş / geçen yıldan düşük etiketli terime "öne çıkar" önerisi var mı
    - verisi olan kaynak için "veri yok" ya da verisi olmayan kaynak kanıt olarak gösterilmiş mi
    - kaynaklar sayısal olarak karşılaştırılmış mı; satış/stok/ciro gibi veride olmayan metrik var mı; İngilizce kelime
 4. Sorun varsa sorunlar modele geri bildirilip **bir kez daha** yanıt istenir (öz-düzeltme). En az sorunlu yanıt
    kullanılır; kalan sorunlar raporun başında ⚠️ ile listelenir.
-5. Rapor (`interpretation.md`) Python tarafından oluşturulur. 2. sorunun (ölçüm ve dönem) sayıları ve raporun
-   sonundaki tüm sonuç tablosu modelden bağımsızdır.
+5. Rapor (`interpretation.md`) Python tarafından oluşturulur. 2. sorunda modelin yanıtının yanına Python'un hesabı
+   eklenir; raporun sonundaki tüm sonuç tablosu modelden bağımsızdır.
 
 ## 6. Sağlamlık
 

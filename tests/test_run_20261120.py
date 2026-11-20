@@ -119,3 +119,16 @@ def test_report_drops_duplicate_suggestions():
     sec3 = md.split("## 3.")[1].split("## 4.")[0]
     assert sec1.count("**Kazak**") == 1 and "İngilizce Vikipedi" not in sec1.split("**Hırka**")[0]
     assert sec3.count("**Kazak**") == 1 and sec3.count("**Palto**") == 1
+
+
+def test_second_real_answer_v032():
+    """v0.3.2 ile aynı çalıştırmanın yeniden yorumu (llama3.1:8b, 2. deneme). Tek uyarı yanlış alarmdı:
+    'uzun vadeli eğilim için daha fazla yıl gerekir' kaynak karşılaştırması sanıldı. Sınırlar da tek maddede
+    birleştirilmişti."""
+    data = json.loads((FIX / "llama31_8b_run_20261120_v032_response.json").read_text(encoding="utf-8"))["data"]
+    issues = _issues(data)
+    assert "Kaynaklar birbiriyle karşılaştırılmış" not in issues
+    assert issues == ("'soyleyemediklerimiz' içinde birden çok sınır tek maddede birleştirilmiş; her sınır ayrı "
+                      "bir liste öğesi olmalı.")
+    data["soyleyemediklerimiz"] = [x.strip() + "." for x in data["soyleyemediklerimiz"][0].split(". ") if x]
+    assert review(data, ROWS, NAMES, W)["ok"], _issues(data)

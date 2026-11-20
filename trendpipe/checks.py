@@ -102,7 +102,8 @@ _YOY_DOWN = re.compile(r"düşük|daha az|altında|azal|düştü|düşüş|geril
 _PROMOTE = re.compile(r"öne çıkar", re.I)
 _NOT_PROMOTE = re.compile(r"çıkarılmamalı|çıkarmamak|çıkarmak için erken|yerine|değil|önermiyoruz|izlenmeli", re.I)
 _CLAUSE = re.compile(r"[;.]\s|;|,\s|\b(?:ama|ancak|fakat|iken|oysa|buna karşın)\b", re.I)
-_COMPARE = re.compile(r"daha (yüksek|düşük|fazla|az|çok)", re.I)
+# "daha fazla yıl/veri gerekir" gibi ifadeler karşılaştırma değildir (20.11.2026 yanlış alarmı).
+_COMPARE = re.compile(r"daha (yüksek|düşük|fazla|az|çok)(?!\s+(?:yıl|veri|gün|dönem|zaman|kaynak))", re.I)
 _COMPUTED = {"computed", "baseline_zero"}
 
 
@@ -113,7 +114,8 @@ def check_claims(text: str, rows: list[dict]) -> list[str]:
       yön yalnızca düşük hacimli seriden geliyor ve çekince yoksa.
     - 1-3. bölüm: verisi olmayan bir kaynak-terim kanıt olarak gösterilmişse.
     - Tüm metin: verisi hesaplanmış bir kaynak-terim için 'veri yok / eksik gün' denmişse.
-    - Tüm metin: iki kaynağın değerleri 'daha yüksek/düşük' diye karşılaştırılmışsa.
+    - Tüm metin: iki kaynağın değerleri 'daha yüksek/düşük' diye karşılaştırılmışsa ("daha fazla yıl gerekir" gibi
+      ifadeler karşılaştırma sayılmaz).
     - 1-3. bölüm: satış/stok/ciro gibi veride olmayan metrikler. Tüm metin: İngilizce kelimeler.
     """
     issues: list[str] = []
@@ -304,6 +306,9 @@ def validate_structured(data, rows: list[dict], names: dict) -> list[str]:
             issues += label_phrase_issues(clause, label, ok, rows, sources)
     if not all(isinstance(x, str) for x in data["soyleyemediklerimiz"]):
         issues.append("'soyleyemediklerimiz' yalnızca metin maddeleri içermeli.")
+    elif any(len(re.findall(r"[.;]\s+\S", x)) >= 3 for x in data["soyleyemediklerimiz"]):
+        issues.append("'soyleyemediklerimiz' içinde birden çok sınır tek maddede birleştirilmiş; her sınır ayrı bir "
+                      "liste öğesi olmalı.")
     return issues
 
 

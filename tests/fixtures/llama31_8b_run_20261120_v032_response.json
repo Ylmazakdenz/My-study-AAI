@@ -1,0 +1,63 @@
+{
+ "_note": "llama3.1:8b, v0.3.2, aynı çalıştırmanın yeniden yorumu, 2. deneme.",
+ "data": {
+  "ozet": "2026-2027 Sonbahar/Kış sezonunda Palto, Kazak, Hırka, Kot pantolon ve Bot / Çizme öne çıkıyor.",
+  "one_cikanlar": [
+   {
+    "terim": "Palto",
+    "kaynak": "Google Trends",
+    "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış",
+    "dayanak": "Google Trends; yakın dönemde önceki döneme göre %+72,1, yıllık %+33,1"
+   },
+   {
+    "terim": "Kazak",
+    "kaynak": "Google Trends",
+    "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış",
+    "dayanak": "Google Trends; yakın dönemde önceki döneme göre %+28,6, yıllık %+15,7"
+   },
+   {
+    "terim": "Bot / Çizme",
+    "kaynak": "Google Trends",
+    "neden_onemli": "Geçen yılın aynı döneminden yüksek. Yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden yüksek",
+    "dayanak": "Google Trends; yakın dönemde önceki döneme göre %+15,7, yıllık %+65,3"
+   },
+   {
+    "terim": "Hırka",
+    "kaynak": "İngilizce Vikipedi",
+    "neden_onemli": "Yakın dönemde arttı ve geçen yılın aynı dönemiyle benzer düzeyde. Her yıl görülen mevsimsel artış",
+    "dayanak": "İngilizce Vikipedi; yakın dönemde %+30,5, yıllık %+12,4"
+   },
+   {
+    "terim": "Kot pantolon",
+    "kaynak": "İngilizce Vikipedi",
+    "neden_onemli": "Geçen yılın aynı döneminden düşük. Yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden düşük",
+    "dayanak": "İngilizce Vikipedi; yakın dönemde %+2,5, yıllık %-55,1"
+   }
+  ],
+  "urun_katkisi": [
+   {
+    "terim": "Palto",
+    "oneri": "İlgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış"
+   },
+   {
+    "terim": "Kazak",
+    "oneri": "İlgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış"
+   },
+   {
+    "terim": "Bot / Çizme",
+    "oneri": "İlgi izlenmeli. Yakın dönemde belirgin artış yok ama ilgi geçen yılın aynı döneminden yüksek"
+   },
+   {
+    "terim": "Hırka",
+    "oneri": "Sezon ürünü olarak öne çıkarmayı destekleyebilir. Bu artış her yıl görülen mevsimsel bir artış"
+   },
+   {
+    "terim": "Kot pantolon",
+    "oneri": "İlgi izlenmeli. Yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden düşük"
+   }
+  ],
+  "soyleyemediklerimiz": [
+   "Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir. Türkçe Vikipedi hacim çok düşük (günlük ortalama 1,4–7,7 görüntüleme); değişimler güvenilir değil. İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir. Veriler arama ilgisi ve bilgi merakını ölçer; satış, stok, fiyat veya tüketici talebi hakkında bilgi içermez. Yıllık karşılaştırma tek bir önceki yıla dayanır; uzun vadeli eğilim için daha fazla yıl gerekir."
+  ]
+ }
+}

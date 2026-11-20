@@ -62,8 +62,8 @@ KURALLAR:
    şey ekleme. YÖN "düşüyor" ya da "geçen yıldan düşük" ise "öne çıkar" DEME.
 5. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
 6. Kaynakları birbiriyle sayısal olarak karşılaştırma; her kaynak farklı bir şey ölçer.
-7. "soyleyemediklerimiz": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz. Veri yetersizse
-   bunu açıkça yaz.
+7. "soyleyemediklerimiz": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz; her madde listede
+   ayrı bir öğe olsun. Veri yetersizse bunu açıkça yaz.
 8. "ozet": en fazla 2 cümle. Tamamen Türkçe yaz; İngilizce kelime kullanma.
 """
 

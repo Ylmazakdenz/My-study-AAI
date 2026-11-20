@@ -159,6 +159,10 @@ Görev belgesi teslimat açısından satır satır yeniden karşılaştırıldı
 Hesaplanan sonuçlar (değişim yüzdeleri, sinyaller, etiketler) değişmedi; örnek çalıştırmalar yeniden analiz edilip
 karşılaştırıldı. Gerçek yanıt `tests/test_run_20261120.py`'de regresyon testi olarak tutulur.
 
+v0.3.2 ile yeniden yorumda bu sorunların hiçbiri tekrarlanmadı. Kalan tek uyarı yanlış alarmdı: "uzun vadeli eğilim
+için daha fazla yıl gerekir" cümlesi kaynak karşılaştırması sanıldı (v0.3.3'te düzeltildi). Model sınırları tek
+maddede birleştirdiği için bu da artık denetleniyor.
+
 ## K9 — Ayar dosyası şemayla doğrulanır (19.11)
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden

@@ -164,7 +164,7 @@ def llm_settings() -> dict:
     }
 
 
-PROJECT_URL = "https://github.com/Ylmazakdenz/My-study-AAI"
+PROJECT_URL = "https://github.com/HilalBzmyr/Algorithmic-Marketing-Agency-AI-Project"
 
 
 def user_agent() -> str:

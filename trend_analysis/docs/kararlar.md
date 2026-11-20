@@ -167,3 +167,15 @@ maddede birleştirdiği için bu da artık denetleniyor.
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden
 geliniyordu; artık çalıştırmadan önce açık bir hata mesajıyla reddedilir.
+
+## K18 — Takım reposuna taşıma (20.11)
+
+- **Durum:** Takım reposu (`HilalBzmyr/Algorithmic-Marketing-Agency-AI-Project`, özel) kökünde takımın README,
+  `.gitignore` ve `.env.example` dosyaları vardı; bizim reponun kökündeki aynı adlı dosyalar bunları ezerdi.
+- **Karar:** Kod, `trend_analysis/` klasörüne **commit geçmişiyle birlikte** taşındı (kopyalanmadı; `git log --follow`
+  ile eski değişiklikler görülebilir). Takımın kök dosyalarına dokunulmadı. Diğer ajanlar (içerik üretimi, kalite
+  denetimi) kendi klasörlerinde geliştirilebilir.
+- **Değişenler:** Komutlar `trend_analysis/` içinden çalıştırılır; test iş akışı kökte
+  (`.github/workflows/trend_analysis.yml`) ve yalnızca bu klasör değişince çalışır; repo adresleri (README, Colab
+  notebook'u, Vikipedi istemci kimliği) takım reposuna çevrildi. Takım reposuna `main`'e doğrudan değil, pull request
+  ile eklendi.

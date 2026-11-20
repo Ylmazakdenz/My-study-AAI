@@ -1,6 +1,7 @@
 # trendpipe — Giyim Trend Veri Hattı
 
-SENG360 Agentic AI projesinin (otonom dijital prodüksiyon ve pazarlama ajansı) **Trend Analizi** katmanı.
+SENG360 Agentic AI projesinin (otonom dijital prodüksiyon ve pazarlama ajansı) **Trend Analizi** katmanı. Takım
+reposunda `trend_analysis/` klasöründe durur; aşağıdaki tüm komutlar bu klasörün içinden çalıştırılır.
 Bir giyim markası için güncel trend verisini gerçek kaynaklardan çeker, değişimi Python ile hesaplar, mevsimsel
 artışı gerçek değişimden ayırır ve sonuçları yerel bir LLM'e (Ollama) yorumlatır.
 
@@ -17,8 +18,8 @@ Bu aşamada ürün eşleştirme, görsel üretimi ve yayınlama **yok**.
 Gereksinimler: **Python 3.10+**, model adımı için **[Ollama](https://ollama.com/download)**.
 
 ```bash
-git clone https://github.com/Ylmazakdenz/My-study-AAI.git
-cd My-study-AAI
+git clone https://github.com/HilalBzmyr/Algorithmic-Marketing-Agency-AI-Project.git   # özel repo: GitHub girişi ister
+cd Algorithmic-Marketing-Agency-AI-Project/trend_analysis
 python3 -m venv .venv
 source .venv/bin/activate              # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt    # projeyi, `trendpipe` komutunu ve test araçlarını kurar
@@ -125,7 +126,6 @@ ama Türkçe Vikipedi'nin hacmi anlamlı sonuç için çok düşük, İngilizce 
 | Model (hocanın kodunda `llama3.2`) | `llama3.1:8b` | 3B model yorumda hata yaptı; hocanın notebook'u 8B'yi de öneriyor. `.env`'de tek satırla değiştirilebilir |
 | Güçlü yerel GPU varsaymıyoruz | GPU şart değil: 8B model GPU'suz bilgisayarda da çalışır ama yavaştır; zayıf bilgisayarda `OLLAMA_MODEL=llama3.2` ya da Colab | — |
 | Aday kaynaklar | Ana kaynak resmi olmayan `pytrends` ile Google Trends; GDELT kapalı | Yukarıdaki tablo; kalıcı çözüm için resmi Google Trends API alfa başvurusu önerilir |
-| Repo | Kod şu an kişisel repoda (`Ylmazakdenz/My-study-AAI`) | Takım reposu kurulunca taşınacak; değişecek yerler: `notebooks/colab_run.ipynb` (`REPO`), `trendpipe/config.py` (`PROJECT_URL`) |
 
 ## Çıktılar
 

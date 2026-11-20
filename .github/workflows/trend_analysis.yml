@@ -1,12 +1,17 @@
-name: tests
+name: trend_analysis
 
 on:
   push:
+    paths: ["trend_analysis/**", ".github/workflows/trend_analysis.yml"]
   pull_request:
+    paths: ["trend_analysis/**", ".github/workflows/trend_analysis.yml"]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trend_analysis
     strategy:
       fail-fast: false
       matrix:
@@ -17,6 +22,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+          cache-dependency-path: trend_analysis/requirements*.txt
       - name: Kurulum
         run: pip install -r requirements-dev.txt
       - name: Lint

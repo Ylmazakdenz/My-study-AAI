@@ -65,6 +65,37 @@ trendpipe interpret --out-dir data/sample --run latest
 - Komuttan: `--terms trenckot,hirka`, `--term "Yelek"`, `--sources google_trends`, `--end 2026-11-15`,
   başka marka için `--config config/marka_b.yaml`.
 
+## Model bağlantısı
+
+**Hocanın kodu** (`SENG360_Agentic_AI_Search_LLMs_V1`) Ollama'yı Google Colab'a kurar, sunucuyu Colab makinesinin
+**içinde** `localhost:11434`'te başlatır, `llama3.2` modelini indirir ve `ollama` Python paketiyle
+`ollama.chat(...)` çağırır. Yani bağlantı uzak bir sunucuya değil, aynı makinedeki **yerel Ollama**'yadır.
+
+**Bu projede** aynı yöntem kullanılır (`ollama` paketi + Ollama sunucusu); Ollama bilgisayara kurulur
+(Mac/Windows uygulaması), adres ve model `.env`'den okunur. Anahtar ya da şifre gerekmez; `.env` repoya girmez.
+
+| `.env` değişkeni | Değer | Not |
+|---|---|---|
+| `OLLAMA_HOST` | `http://localhost:11434` | Yerel kurulumda ve hocanın Colab kurulumunda aynı |
+| `OLLAMA_MODEL` | `llama3.1:8b` | Hocanın notebook'u T4 için `llama3.2` (3B) ve `llama3.1` (8B) önerir; 3B Türkçe yorumda hata yaptığı için 8B ([kararlar K2](docs/kararlar.md)) |
+| `OLLAMA_TEMPERATURE`, `OLLAMA_TIMEOUT` | `0.2`, `300` | |
+
+Hocanın Colab kurulumuyla çalıştırmak için: [notebooks/colab_run.ipynb](notebooks/colab_run.ipynb) (güncel Ollama
+kurulumu için `zstd` paketi eklendi).
+
+## Veri kaynakları (kısa karşılaştırma)
+
+Kontrol: 19.11.2026, resmi belgeler. Ayrıntı, bağlantılar ve gerçek denemelere göre seçim: [docs/kaynaklar.md](docs/kaynaklar.md).
+
+| Kaynak | Verinin anlamı | Otomatik erişim | Gereksinim | Kapsam (TR / dönem) | Giyime katkı | Durum |
+|---|---|---|---|---|---|---|
+| Google Trends | Google arama ilgisi (0-100, göreli) | Resmi API kapalı alfa; `pytrends` (resmi değil) | Alfa başvurusu; pytrends anahtarsız, hız sınırlı | TR var; geçmiş dönem | Ürün/stil arama ilgisi — en güçlü sinyal | **Ana kaynak** (6/6 gerçek istek) |
+| Wikimedia | Vikipedi makale görüntülemesi | Resmi REST API | Anahtar yok; User-Agent zorunlu | tr + en; 2015'ten beri günlük | Ürün tipine bilgi merakı | **Yedek** (TR hacmi çok düşük; EN dünya geneli) |
+| GDELT | Haberlerde geçme sayısı | Resmi uç nokta | Anahtar yok; sık 429 | TR haberleri; son ~1 yıl | Moda gündemi | **Kapalı** (4 denemede veri alınamadı) |
+| Pinterest Trends | Pinterest arama hacmi | Resmi API | İşletme hesabı + onay | TR doğrulanamadı; yalnız bugün | Stil keşfi; terim sorgulanamaz | Seçilmedi |
+| YouTube Data API | Video izlenme toplamları | Resmi API | Ücretsiz anahtar, günlük kota | `regionCode=TR`; geçmiş seri yok | Video ilgisi; zaman serisi yok | Seçilmedi |
+| Reddit | Gönderi/yorum | Resmi API (OAuth) | Ön onay; yeni başvurular kapanıyor (ikincil kaynak) | TR kapsamı zayıf | Düşük | Seçilmedi |
+
 ## Çıktılar
 
 ```

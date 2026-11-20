@@ -111,6 +111,7 @@ ama Türkçe Vikipedi'nin hacmi anlamlı sonuç için çok düşük, İngilizce 
 | Google Trends "kaşe kaban" | Bazı günler `0` | Google'a göre 0 = "yeterli veri yok"; sıfır değil eksik sayıldı |
 | Vikipedi geçen yılla karşılaştırma | Tüm makaleler geçen yıla göre %27–62 düşük | Vikipedi'nin genel trafiği düşmüş; değerler projenin toplam trafiğine oranlandı |
 | Model yorumu (`llama3.2`, sonra `llama3.1:8b`) | Belirgin değişimi olmayan terime "artıyor", veride olmayan "satış artışı", Türkçe-İngilizce karışık, geçen yıldan düşük ürüne "öne çıkar" | `llama3.1:8b`; model JSON şemasıyla yanıt veriyor, yanıt hesaplanan sonuçlarla otomatik denetleniyor, sorun varsa model bir kez daha yanıtlıyor; ayrıntı: [docs/kararlar.md](docs/kararlar.md) |
+| Model yorumu, 3 kaynak birlikte (20.11) | Aynı terim iki kaynaktan öne çıkarıldı, öneriler tekrarlandı; "geçen yıldan yüksek" terime "sezon üstü", sezon üstü terime "mevsimsel artış" dendi | Terim başına tek aday (öncelik Google Trends); ürün önerisi tonu etikete göre Python'da; etiket ifadeleri denetleniyor ([K17](docs/kararlar.md)) |
 
 ## Ortak kararlardan farklı yapılanlar (onayın gerekiyor)
 

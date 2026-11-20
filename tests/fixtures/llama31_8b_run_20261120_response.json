@@ -1,0 +1,91 @@
+{
+ "_note": "llama3.1:8b, v0.3.0, 2. deneme (dayanak alanı o sürümde yoktu).",
+ "data": {
+  "ozet": "Palto ve Kazak öne çıkıyor. Palto sezon üstü artış gösteriyor, Kazak ise mevsimsel artış gösteriyor.",
+  "one_cikanlar": [
+   {
+    "terim": "Palto",
+    "kaynak": "Google Trends",
+    "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Bu, sezon üstü bir artışın göstergesidir."
+   },
+   {
+    "terim": "Kazak",
+    "kaynak": "Google Trends",
+    "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Bu, sezon üstü bir artışın göstergesidir."
+   },
+   {
+    "terim": "Bot / Çizme",
+    "kaynak": "Google Trends",
+    "neden_onemli": "Yakın dönemde belirgin değişim yok, ancak geçen yılın aynı döneminden yüksek. Bu, sezon üstü bir artışın göstergesidir."
+   },
+   {
+    "terim": "Hırka",
+    "kaynak": "İngilizce Vikipedi",
+    "neden_onemli": "Yakın dönemde arttı ve geçen yılın aynı döneminden benzer düzeyde. Bu, mevsimsel bir artışın göstergesidir."
+   },
+   {
+    "terim": "Kazak",
+    "kaynak": "İngilizce Vikipedi",
+    "neden_onemli": "Yakın dönemde arttı ve geçen yılın aynı döneminden benzer düzeyde. Bu, mevsimsel bir artışın göstergesidir."
+   },
+   {
+    "terim": "Palto",
+    "kaynak": "İngilizce Vikipedi",
+    "neden_onemli": "Yakın dönemde arttı ve geçen yılın aynı döneminden benzer düzeyde. Bu, mevsimsel bir artışın göstergesidir."
+   },
+   {
+    "terim": "Bot / Çizme",
+    "kaynak": "İngilizce Vikipedi",
+    "neden_onemli": "Yakın dönemde belirgin değişim yok ve geçen yılın aynı döneminden düşük. Bu, mevsimsel bir düşüşün göstergesidir."
+   },
+   {
+    "terim": "Trençkot",
+    "kaynak": "Google Trends",
+    "neden_onemli": "Yakın dönemde azaldı ve geçen yılın aynı döneminden benzer düzeyde. Bu, mevsimsel bir düşüşün göstergesidir."
+   }
+  ],
+  "urun_katkisi": [
+   {
+    "terim": "Palto",
+    "oneri": "Öne çıkarmayı destekleyebilir. Mevsimsel artışlar her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Kazak",
+    "oneri": "Öne çıkar. Mevsimsel artışlar her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Bot / Çizme",
+    "oneri": "İlgi izlenmeli. Mevsimsel artışlar her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Hırka",
+    "oneri": "Öne çıkar. Mevsimsel artışlar her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Kazak",
+    "oneri": "Öne çıkar. Mevsimsel artışlar her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Palto",
+    "oneri": "Öne çıkar. Mevsimsel artışlar her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Bot / Çizme",
+    "oneri": "İlgi izlenmeli. Mevsimsel artışlar her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Kot pantolon",
+    "oneri": "İlgi izlenmeli. Mevsimsel düşüşler her yıl görülen bir durumdur."
+   },
+   {
+    "terim": "Trençkot",
+    "oneri": "İlgi izlenmeli. Mevsimsel düşüşler her yıl görülen bir durumdur."
+   }
+  ],
+  "soyleyemediklerimiz": [
+   "Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir.",
+   "İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.",
+   "Veriler arama ilgisi ve bilgi merakını ölçer; satış, stok, fiyat veya tüketici talebi hakkında bilgi içermez."
+  ]
+ }
+}

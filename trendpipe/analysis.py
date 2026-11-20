@@ -25,7 +25,8 @@ ANALYSIS_FIELDS = [
     "source", "metric", "term_id", "label", "category", "query", "fetch_status", "result",
     "baseline_start", "baseline_end", "recent_start", "recent_end",
     "baseline_days_present", "recent_days_present", "source_gap_days", "baseline_coverage", "recent_coverage",
-    "baseline_mean", "recent_mean", "abs_change", "pct_change", "recent_slope_per_day",
+    "baseline_mean", "recent_mean", "baseline_raw_mean", "recent_raw_mean", "abs_change", "pct_change",
+    "recent_slope_per_day",
     "direction", "pop_t_stat", "low_volume", "signal",
     "ly_start", "ly_end", "yoy_result", "yoy_granularity", "yoy_ly_points", "yoy_recent_points",
     "yoy_ly_mean", "yoy_recent_mean", "yoy_pct_change", "yoy_direction", "yoy_t_stat", "yoy_low_volume",
@@ -200,7 +201,8 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
         "source_gap_days": len(gap_days),
         "baseline_coverage": round(len(base_vals) / len(base_days), 3) if base_days else 0.0,
         "recent_coverage": round(len(rec_vals) / len(rec_days), 3) if rec_days else 0.0,
-        "baseline_mean": None, "recent_mean": None, "abs_change": None, "pct_change": None,
+        "baseline_mean": None, "recent_mean": None, "baseline_raw_mean": None, "recent_raw_mean": None,
+        "abs_change": None, "pct_change": None,
         "recent_slope_per_day": None, "direction": None, "pop_t_stat": None, "low_volume": None, "notes": [],
     }
     if gap_days:
@@ -244,6 +246,8 @@ def analyze_series(points: list[Point], window: Window, *, min_coverage: float =
     # Düşük hacim, normalize edilmişse ham sayılar üzerinden değerlendirilir.
     rbm = mean(raw_by_day[d] for d in base_days if d in by_day)
     rrm = mean(raw_by_day[d] for d in rec_days if d in by_day)
+    # Ham ortalamalar (normalize edilmemiş birimde) düşük hacim açıklamasında kullanılır.
+    out["baseline_raw_mean"], out["recent_raw_mean"] = round(rbm, 3), round(rrm, 3)
     out["low_volume"] = bool(low_volume is not None and rbm < low_volume and rrm < low_volume)
     if out["low_volume"]:
         out["notes"].append(f"Düşük hacim (ortalamalar < {low_volume}); küçük sayılardaki değişim gürültü olabilir.")

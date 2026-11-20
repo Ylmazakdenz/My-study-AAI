@@ -41,7 +41,9 @@ ajanlar (ürün eşleştirme, içerik) bu dosyaları girdi olarak kullanır; ala
 | Alan | Anlamı |
 |---|---|
 | `fetch_status`, `result` | İstek durumu; hesap sonucu (`computed`, `insufficient_data`, `baseline_zero`, `no_data`) |
-| `baseline_mean`, `recent_mean`, `pct_change` | Dönemsel karşılaştırma (oranlanmış kaynaklarda kaynağın toplamına oran) |
+| `metric` | Değerlerin birimi: `relative_interest_0_100`, `pageviews`, oranlanmışsa `per_1000000_of_source_total` (kaynak toplamında milyonda pay) |
+| `baseline_mean`, `recent_mean`, `pct_change` | Dönemsel karşılaştırma (`metric` biriminde) |
+| `baseline_raw_mean`, `recent_raw_mean` | Aynı ortalamalar oranlanmadan önceki ham birimde (ör. görüntüleme); düşük hacim bunlarla değerlendirilir |
 | `pop_t_stat` | Dönemsel değişimin günlük dalgalanmaya göre büyüklüğü (Welch t) |
 | `direction`, `signal` | `up/down/flat`; `strong_up/strong_down/flat/weak/insufficient/no_data` |
 | `baseline_coverage`, `recent_coverage`, `source_gap_days`, `low_volume` | Veri yeterliliği |

@@ -97,11 +97,16 @@ Düşük hacim, hesaplanamadı ve veri yok durumları etiket olarak aynen geçer
 
 ## 5. Model yorumu
 
-1. Python, **aday listesini** (güvenilir sinyali olan terim-kaynak çiftleri), kanıtları ve sınırları hazırlar.
+1. Python, **aday listesini**, kanıtları ve sınırları hazırlar. Aday = güvenilir sinyali olan terim-kaynak çifti;
+   **her terim için tek aday** vardır: terim birden çok kaynakta aday etiketi taşıyorsa config'teki kaynak sırasına
+   göre önceliği en yüksek olan (Türkiye pazarı için Google Trends) seçilir, diğer kaynakların sonuçları bağlam
+   olarak verilir. Her adayın ürün önerisi tonu (`ÖNERİ`) etikete göre Python'da belirlenir.
 2. Model (Ollama), bir **JSON şemasına** uyan yanıtla görev belgesindeki dört soruyu yanıtlar: öne çıkanlar + neden
    (1), destekleyen ölçüm ve dönem — `dayanak` (2), ürün seçimine katkı (3), söyleyemediklerimiz (4); ayrıca kısa özet.
 3. Yanıt denetlenir (`trendpipe/checks.py`):
-   - öne çıkanlar yalnızca aday listesinden mi; ürün önerileri yalnızca seçilen terimler için mi
+   - öne çıkanlar yalnızca aday listesinden mi; ürün önerileri yalnızca seçilen terimler için mi; terim tekrarı var mı
+   - etiket ifadeleri terimin etiketine uyuyor mu ("sezon üstü" yalnızca sezon üstü artışta; "mevsimsel artış/düşüş",
+     "her yıl görülen" yalnızca mevsimsel etiketlerde; cümlede başka kaynak adı geçiyorsa o kaynağın etiketi de geçerli)
    - hesaplanan sonuçlarda olmayan yüzde ya da analiz dönemlerinde olmayan tarih var mı
    - hesaplanan yönle çelişen artış/düşüş iddiası var mı; "geçen yıl" ifadeleri ayrıca yıllık yönle karşılaştırılır
    - düşüş / geçen yıldan düşük etiketli terime "öne çıkar" önerisi var mı

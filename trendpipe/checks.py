@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import re
 
-from .prompts import CANDIDATE_LABELS, DOWN_LABELS
+from .analysis import Trend
+from .prompts import DOWN_LABELS, TREND_TR, candidates
 
 _PCT = re.compile(r"([-+−]?\d+(?:[.,]\d+)?)\s*%|%\s*([-+−]?\d+(?:[.,]\d+)?)")
 
@@ -194,6 +195,46 @@ def _norm(s: str) -> str:
     return re.sub(r"[^\wçğıöşü/ ]", "", _lower_tr(s)).strip()
 
 
+_SEASONAL = {Trend.SEASONAL_UP, Trend.SEASONAL_UP_WEAKER, Trend.SEASONAL_DOWN, Trend.SEASONAL_DOWN_STRONGER}
+# Etiket ifadesi -> bu ifadeyi taşıyabilecek etiketler. 20.11.2026 çalıştırmasında model 'geçen yıldan yüksek' olan
+# terime 'sezon üstü', 'geçen yıldan düşük' olana 'mevsimsel düşüş' dedi ve her öneriye 'mevsimsel artışlar her yıl
+# görülür' ekledi; yön denetimi bunları yakalamıyordu.
+_LABEL_PHRASES = [
+    (re.compile(r"sezon\s+üstü"), {Trend.ABOVE_SEASON_UP}, "sezon üstü"),
+    (re.compile(r"sezon\s+altı"), {Trend.ABOVE_SEASON_DOWN}, "sezon altı"),
+    (re.compile(r"mevsimsel\s+(?:bir\s+)?artı[şs]"), {Trend.SEASONAL_UP, Trend.SEASONAL_UP_WEAKER}, "mevsimsel artış"),
+    (re.compile(r"mevsimsel\s+(?:bir\s+)?düşü[şs]"), {Trend.SEASONAL_DOWN, Trend.SEASONAL_DOWN_STRONGER},
+     "mevsimsel düşüş"),
+    (re.compile(r"her\s+yıl\s+görülen"), _SEASONAL, "her yıl görülen"),
+]
+_NEGATED = re.compile(r"^\W*(?:\w+\W+){0,2}değil")
+
+
+def label_phrase_issues(text: str, term: str, allowed: set[str], rows: list[dict], sources: list[str]) -> list[str]:
+    """Metindeki etiket ifadeleri ('sezon üstü', 'mevsimsel artış'...) terimin etiketine uyuyor mu?
+
+    allowed: terimin seçilen etiket(ler)i. Bir cümle parçasında başka bir kaynak adı geçiyorsa, o kaynaktaki etiketi de
+    o parçada kullanılabilir ("İngilizce Vikipedi'de ise mevsimsel artış var" gibi).
+    """
+    bad: list[str] = []
+    for clause in _CLAUSE.split(text or ""):
+        if not clause:
+            continue
+        low = _lower_tr(clause)
+        ok = set(allowed) | {r.get("trend_label") for r in rows if _norm(r["label"]) == _norm(term)
+                             and r["source"] in mentioned_sources(low, sources)}
+        for rx, labels, phrase in _LABEL_PHRASES:
+            for m in rx.finditer(low):
+                if _NEGATED.search(low[m.end():]):
+                    continue  # "mevsimsel bir artış değil" gibi olumsuzlama
+                if not labels & ok and phrase not in bad:
+                    bad.append(phrase)
+    if not bad:
+        return []
+    lab = ", ".join(TREND_TR.get(x, x) for x in sorted(allowed)) or "aday değil"
+    return [f"'{term}' için {', '.join(repr(b) for b in bad)} ifadesi kullanılmış ama etiketi farklı ({lab})."]
+
+
 def validate_structured(data, rows: list[dict], names: dict) -> list[str]:
     """JSON yanıtın şemaya ve aday listesine uygunluğu. Boş liste = sorun yok."""
     if not isinstance(data, dict):
@@ -204,39 +245,63 @@ def validate_structured(data, rows: list[dict], names: dict) -> list[str]:
             issues.append(f"'{key}' alanı eksik ya da türü yanlış.")
     if issues:
         return issues
-    allowed = {(_norm(r["label"]), r["source"]) for r in rows if r.get("trend_label") in CANDIDATE_LABELS}
+    cands = candidates(rows, list(names))
+    allowed = {(_norm(r["label"]), r["source"]) for r in cands}
+    cand_label = {_norm(r["label"]): r["trend_label"] for r in cands}
+    sources = sorted({r["source"] for r in rows})
     alias = {}
     for key, disp in names.items():
         for a in (key, disp):
             alias[_norm(a)] = key
-    chosen = set()
-    chosen_labels: dict[str, set[str]] = {}
-    label_of = {(_norm(r["label"]), r["source"]): r.get("trend_label") for r in rows}
+    chosen: dict[str, str] = {}   # terim -> seçilen etiket
     for item in data["one_cikanlar"]:
         if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("terim", "kaynak",
                                                                                           "neden_onemli", "dayanak")):
             issues.append("'one_cikanlar' içinde şemaya uymayan öğe var.")
             continue
-        src = alias.get(_norm(item["kaynak"]))
-        if (_norm(item["terim"]), src) not in allowed:
+        term, src = _norm(item["terim"]), alias.get(_norm(item["kaynak"]))
+        if (term, src) not in allowed:
+            other = [r for r in cands if _norm(r["label"]) == term]
+            hint = (f" Bu terimin adayı: {other[0]['label']} / {names.get(other[0]['source'], other[0]['source'])}."
+                    if other else "")
             issues.append(f"'{item['terim']} / {item['kaynak']}' aday listesinde yok; yalnızca aday listesindeki "
-                          "terim-kaynak çiftleri seçilebilir.")
+                          f"terim-kaynak çiftleri seçilebilir.{hint}")
+        elif term in chosen:
+            issues.append(f"'{item['terim']}' öne çıkanlarda birden fazla kez yazılmış; her terim bir kez yazılır.")
         else:
-            chosen.add(_norm(item["terim"]))
-            chosen_labels.setdefault(_norm(item["terim"]), set()).add(label_of[(_norm(item["terim"]), src)])
+            chosen[term] = cand_label[term]
+            issues += label_phrase_issues(f"{item['neden_onemli']}; {item['dayanak']}", item["terim"],
+                                          {chosen[term]}, rows, sources)
     if not allowed and data["one_cikanlar"]:
         issues.append("Aday listesi boş olduğu halde öne çıkan terim yazılmış.")
+    seen: set[str] = set()
     for item in data["urun_katkisi"]:
         if not isinstance(item, dict) or not isinstance(item.get("terim"), str) or not isinstance(item.get("oneri"),
                                                                                                    str):
             issues.append("'urun_katkisi' içinde şemaya uymayan öğe var.")
-        elif _norm(item["terim"]) not in chosen:
+            continue
+        term = _norm(item["terim"])
+        if term not in chosen:
             issues.append(f"'urun_katkisi' içindeki '{item['terim']}' öne çıkanlar arasında değil.")
-        elif _PROMOTE.search(item["oneri"]) and not _NOT_PROMOTE.search(item["oneri"]) and \
-                chosen_labels.get(_norm(item["terim"]), set()) and \
-                chosen_labels[_norm(item["terim"])] <= DOWN_LABELS:
+            continue
+        if term in seen:
+            issues.append(f"'urun_katkisi' içinde '{item['terim']}' birden fazla kez yazılmış; her terim için tek "
+                          "öneri yazılır.")
+            continue
+        seen.add(term)
+        if _PROMOTE.search(item["oneri"]) and not _NOT_PROMOTE.search(item["oneri"]) and chosen[term] in DOWN_LABELS:
             issues.append(f"'{item['terim']}' ilgisi düşüyor / geçen yıldan düşük olduğu halde 'öne çıkar' "
                           "önerilmiş.")
+        issues += label_phrase_issues(item["oneri"], item["terim"], {chosen[term]}, rows, sources)
+    # Özet: terim adı geçen her cümle parçasında etiket ifadesi o terime uymalı.
+    for clause in _CLAUSE.split(data["ozet"]):
+        low = _lower_tr(clause or "")
+        for label in sorted({r["label"] for r in rows}, key=len, reverse=True):
+            if _lower_tr(label) not in low:
+                continue
+            ok = {cand_label[_norm(label)]} if _norm(label) in cand_label else \
+                {r.get("trend_label") for r in rows if r["label"] == label}
+            issues += label_phrase_issues(clause, label, ok, rows, sources)
     if not all(isinstance(x, str) for x in data["soyleyemediklerimiz"]):
         issues.append("'soyleyemediklerimiz' yalnızca metin maddeleri içermeli.")
     return issues

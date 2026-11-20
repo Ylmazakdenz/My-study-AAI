@@ -20,17 +20,17 @@ import time
 from .checks import _norm, review
 from .logs import get_logger
 from .prompts import (
-    CANDIDATE_LABELS,
     RESPONSE_SCHEMA,
     SYSTEM_PROMPT,
     TREND_TR,
-    _num,
     _pct,
+    _val,
     build_user_prompt,
     candidates,
     evidence_line,
     limitations,
     reason_tr,
+    value_unit,
 )
 
 log = get_logger("llm")
@@ -125,16 +125,18 @@ def interpret(rows: list[dict], context: dict, settings: dict, max_attempts: int
 def evidence_table(rows: list[dict], names: dict) -> str:
     """Python'un hesapladığı tüm sonuçlar (modelden bağımsız, doğrulama için)."""
     order = list(TREND_TR)
-    out = ["| Terim | Kaynak | Dönemsel değişim | Yıllık değişim | Etiket |", "|---|---|---:|---:|---|"]
+    out = ["| Terim | Kaynak | Birim | Dönemsel değişim | Yıllık değişim | Etiket |", "|---|---|---|---:|---:|---|"]
     for r in sorted(rows, key=lambda r: (order.index(r.get("trend_label", "veri_yok")), r["source"], r["label"])):
         lab = TREND_TR.get(r.get("trend_label"), "-")
         if r.get("signal") in ("no_data", "insufficient"):
             lab += f" ({reason_tr(r)})"
-        pop = (f"{_num(r.get('baseline_mean'))} → {_num(r.get('recent_mean'))} ({_pct(r.get('pct_change'))})"
+        pop = (f"{_val(r, r.get('baseline_mean'))} → {_val(r, r.get('recent_mean'))} ({_pct(r.get('pct_change'))})"
                if r.get("baseline_mean") is not None else "-")
-        yoy = (f"{_num(r.get('yoy_ly_mean'))} → {_num(r.get('yoy_recent_mean'))} ({_pct(r.get('yoy_pct_change'))})"
+        yoy = (f"{_val(r, r.get('yoy_ly_mean'))} → {_val(r, r.get('yoy_recent_mean'))} "
+               f"({_pct(r.get('yoy_pct_change'))})"
                if r.get("yoy_pct_change") is not None else "-")
-        out.append(f"| {r['label']} | {names.get(r['source'], r['source'])} | {pop} | {yoy} | {lab} |")
+        unit = value_unit(r) if r.get("baseline_mean") is not None or r.get("yoy_pct_change") is not None else "-"
+        out.append(f"| {r['label']} | {names.get(r['source'], r['source'])} | {unit} | {pop} | {yoy} | {lab} |")
     return "\n".join(out)
 
 
@@ -163,20 +165,22 @@ def render_markdown(result: dict, rows: list[dict], names: dict, meta: dict) -> 
         lines += ["## Özet", "", data["ozet"].strip(), ""]
 
     lines += ["## 1. Öne çıkan terimler", ""]
+    cands = candidates(rows, list(names))
+    cand_keys = {(_norm(r["label"]), r["source"]) for r in cands}
     chosen = []
     for it in data.get("one_cikanlar", []):
         if not isinstance(it, dict):
             continue
         src = alias.get(_norm(str(it.get("kaynak", ""))), it.get("kaynak"))
         r = by_key.get((_norm(str(it.get("terim", ""))), src))
-        if not r or r.get("trend_label") not in CANDIDATE_LABELS:
-            continue  # aday olmayan seçim rapora girmez (uyarılarda listelenir)
+        if not r or (_norm(r["label"]), r["source"]) not in cand_keys or r in chosen:
+            continue  # aday olmayan ya da tekrarlanan seçim rapora girmez (uyarılarda listelenir)
         chosen.append(r)
         lines.append(f"- **{it.get('terim')}** ({names.get(src, it.get('kaynak'))}) — "
                      f"*{TREND_TR.get(r['trend_label'])}*: {it.get('neden_onemli')}")
     chosen_terms = {_norm(r["label"]) for r in chosen}
     if not chosen:
-        lines.append("- Güvenilir bir değişim gösteren terim yok." if not candidates(rows) else
+        lines.append("- Güvenilir bir değişim gösteren terim yok." if not cands else
                      "- Model öne çıkan terim seçmedi.")
 
     lines += ["", "## 2. Destekleyen ölçüm ve dönem", ""]
@@ -193,8 +197,14 @@ def render_markdown(result: dict, rows: list[dict], names: dict, meta: dict) -> 
         lines.append("- Öne çıkan terim olmadığı için kanıt satırı yok.")
 
     lines += ["", "## 3. Ürün seçimine olası katkı", ""]
-    lines += [f"- **{it.get('terim')}**: {it.get('oneri')}" for it in data.get("urun_katkisi", [])
-              if isinstance(it, dict) and _norm(str(it.get("terim", ""))) in chosen_terms] or ["- (yok)"]
+    shown: set[str] = set()
+    for it in data.get("urun_katkisi", []):
+        t = _norm(str(it.get("terim", ""))) if isinstance(it, dict) else ""
+        if t in chosen_terms and t not in shown:  # terim başına tek öneri
+            shown.add(t)
+            lines.append(f"- **{it.get('terim')}**: {it.get('oneri')}")
+    if not shown:
+        lines.append("- (yok)")
 
     lines += ["", "## 4. Bu veriyle söyleyemediklerimiz", ""]
     lines += [f"- {x}" for x in data.get("soyleyemediklerimiz", []) if isinstance(x, str)] or ["- (model yazmadı)"]

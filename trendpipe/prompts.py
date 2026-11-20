@@ -8,6 +8,11 @@ Tasarım (gerçek denemelerden çıkan ders):
 - Model görev belgesindeki 4 soruyu yanıtlar: öne çıkanlar + neden (1), destekleyen ölçüm ve dönem (2, "dayanak"),
   ürün seçimine katkı (3), söyleyemediklerimiz (4) ve kısa özet. 2. sorunun yanıtındaki yüzde ve tarihler denetlenir;
   raporda yanına Python'un hesapladığı kanıt satırı da eklenir.
+- Her terim için tek aday vardır: etiketi aday olan kaynaklardan önceliği en yüksek olanı (config'teki kaynak
+  sırası; Türkiye pazarı için Google Trends önce). Aynı terimin birden çok kaynaktan aday olması modeli
+  tekrarlara ve etiketleri karıştırmaya itiyordu (20.11.2026 çalıştırması). Diğer kaynakların sonuçları bağlam
+  olarak verilir.
+- Ürün önerisinin tonu (ÖNERİ) etikete göre Python'da belirlenir; model bunu kendi cümlesiyle yazar.
 """
 
 from __future__ import annotations
@@ -44,17 +49,17 @@ veriliyor. Yanıtını YALNIZCA verilen JSON şemasına uygun, Türkçe olarak v
 
 KURALLAR:
 1. "one_cikanlar" içine YALNIZCA ADAY LİSTESİ'ndeki terim-kaynak çiftlerini yaz; terim ve kaynak adlarını listede
-   yazıldığı gibi kopyala. Aday listesi boşsa "one_cikanlar" ve "urun_katkisi" boş liste olsun.
+   yazıldığı gibi kopyala. Her terim en fazla bir kez yazılır. Aday listesi boşsa "one_cikanlar" ve
+   "urun_katkisi" boş liste olsun.
 2. "neden_onemli": adayın ANLAMI alanını kendi cümlenle yaz. ANLAMI'nda olmayan bir şey söyleme; özellikle geçen
    yılla ilgili ifadeyi ANLAMI'nda yazdığı gibi kullan (geçen yıldan yüksek / benzer / düşük).
+   Etiket ifadelerini yalnızca o etiketi taşıyan terim için kullan: "sezon üstü" yalnızca ETİKET'i sezon üstü
+   olan terim için; "mevsimsel" ve "her yıl görülen" yalnızca ETİKET'inde "mevsimsel" geçen terim için.
    Yeni sayı yazma; sayı yazacaksan yalnızca aday satırındaki yüzdeleri aynen kullan.
 3. "dayanak" (destekleyen ölçüm ve dönem): kaynağı, karşılaştırılan dönemleri (tarihleriyle) ve yüzde değişimi
    yaz. Yalnızca aday satırındaki yüzdeleri ve yukarıda verilen dönem tarihlerini aynen kullan.
-4. "urun_katkisi": her öne çıkan terim için bir madde, adayın YÖN alanına göre:
-   - YÖN "yükseliyor" ise ihtiyatlı öneri ("öne çıkarmayı destekleyebilir"); mevsimsel artışta bunun her yıl görülen
-     bir artış olduğunu belirt.
-   - YÖN "düşüyor" ya da "geçen yıldan düşük" ise "öne çıkar" DEME; "ilgi izlenmeli", "öne çıkarmak için erken"
-     gibi yaz.
+4. "urun_katkisi": her öne çıkan terim için TEK bir madde; adayın ÖNERİ alanını kendi cümlenle yaz, başka bir
+   şey ekleme. YÖN "düşüyor" ya da "geçen yıldan düşük" ise "öne çıkar" DEME.
 5. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.
 6. Kaynakları birbiriyle sayısal olarak karşılaştırma; her kaynak farklı bir şey ölçer.
 7. "soyleyemediklerimiz": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz. Veri yetersizse
@@ -126,6 +131,13 @@ def _num(v: float | None) -> str:
     return "-" if v is None else f"{v:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _val(r: dict, v: float | None) -> str:
+    """Ortalama değer; oranlanmış (pay) değerler küçük olduğu için iki ondalıkla yazılır."""
+    if v is None or not str(r.get("metric") or "").startswith("per_"):
+        return _num(v)
+    return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 def _pct(v: float | None) -> str:
     return "-" if v is None else f"%{v:+.1f}".replace(".", ",")
 
@@ -140,10 +152,44 @@ def _d(s: str) -> str:
     return f"{d}.{m}.{y}"
 
 
-def candidates(rows: list[dict]) -> list[dict]:
-    """Modelin seçebileceği terim-kaynak çiftleri (Python belirler)."""
-    c = [r for r in rows if r.get("trend_label") in CANDIDATE_LABELS]
-    return sorted(c, key=lambda r: (_LABEL_ORDER.index(r["trend_label"]), -abs(r.get("pct_change") or 0)))
+_PER_WORD = {1_000_000: "milyonda", 100_000: "yüz binde", 10_000: "on binde", 1_000: "binde"}
+
+
+def value_unit(r: dict) -> str:
+    """Ortalamaların birimi (normalize edilmiş Vikipedi değerleri görüntüleme sayısı değil, paydır)."""
+    m = str(r.get("metric") or "")
+    if m.startswith("per_") and m.endswith("_of_source_total"):
+        per = int(m.split("_")[1])
+        return f"kaynak toplamındaki pay, {_PER_WORD.get(per, f'{per} birimde')}"
+    return {"relative_interest_0_100": "göreli ilgi, 0-100", "pageviews": "görüntüleme",
+            "article_count": "haber"}.get(m, m or "değer")
+
+
+def raw_unit(source: str) -> str:
+    """Normalize edilmemiş (ham) değerin birimi; düşük hacim açıklaması ham değerle yapılır."""
+    if source.startswith("wikimedia"):
+        return "görüntüleme"
+    if source.startswith("gdelt"):
+        return "haber"
+    return "göreli ilgi, 0-100" if source.startswith("google_trends") else "değer"
+
+
+def candidates(rows: list[dict], source_order: list[str] | None = None) -> list[dict]:
+    """Modelin seçebileceği terim-kaynak çiftleri (Python belirler): terim başına bir aday.
+
+    Bir terim birden çok kaynakta aday etiketi taşıyorsa önceliği en yüksek kaynak seçilir (source_order; verilmezse
+    satırlardaki ilk görünüş sırası = config sırası).
+    """
+    order = list(source_order or dict.fromkeys(r["source"] for r in rows))
+    rank = {s: i for i, s in enumerate(order)}
+    best: dict[str, dict] = {}
+    for r in rows:
+        if r.get("trend_label") not in CANDIDATE_LABELS:
+            continue
+        cur = best.get(r["label"])
+        if cur is None or rank.get(r["source"], len(order)) < rank.get(cur["source"], len(order)):
+            best[r["label"]] = r
+    return sorted(best.values(), key=lambda r: (_LABEL_ORDER.index(r["trend_label"]), -abs(r.get("pct_change") or 0)))
 
 
 def evidence_line(r: dict, names: dict) -> str:
@@ -151,13 +197,13 @@ def evidence_line(r: dict, names: dict) -> str:
     nm = names.get(r["source"], r["source"])
     parts = [f"**{r['label']} — {nm}**: {TREND_TR.get(r.get('trend_label'), '-')}."]
     if r.get("baseline_mean") is not None:
-        parts.append(f"Dönemsel: günlük ortalama {_num(r['baseline_mean'])} ({_d(r['baseline_start'])}–"
-                     f"{_d(r['baseline_end'])}) → {_num(r['recent_mean'])} ({_d(r['recent_start'])}–"
-                     f"{_d(r['recent_end'])}), {_pct(r.get('pct_change'))}.")
+        parts.append(f"Dönemsel ({value_unit(r)}): günlük ortalama {_val(r, r['baseline_mean'])} "
+                     f"({_d(r['baseline_start'])}–{_d(r['baseline_end'])}) → {_val(r, r['recent_mean'])} "
+                     f"({_d(r['recent_start'])}–{_d(r['recent_end'])}), {_pct(r.get('pct_change'))}.")
     if r.get("yoy_pct_change") is not None:
-        parts.append(f"Yıllık: geçen yıl aynı dönem ({_d(r['ly_start'])}–{_d(r['ly_end'])}) "
-                     f"{_num(r['yoy_ly_mean'])} → bu yıl {_num(r['yoy_recent_mean'])}, {_pct(r['yoy_pct_change'])} "
-                     f"({r.get('yoy_granularity')} veri).")
+        parts.append(f"Yıllık ({value_unit(r)}): geçen yıl aynı dönem ({_d(r['ly_start'])}–{_d(r['ly_end'])}) "
+                     f"{_val(r, r['yoy_ly_mean'])} → bu yıl {_val(r, r['yoy_recent_mean'])}, "
+                     f"{_pct(r['yoy_pct_change'])} ({r.get('yoy_granularity')} veri).")
     else:
         parts.append("Yıllık karşılaştırma yapılamadı.")
     return "- " + " ".join(parts)
@@ -182,10 +228,29 @@ UP_LABELS = {Trend.ABOVE_SEASON_UP, Trend.SEASONAL_UP, Trend.SEASONAL_UP_WEAKER,
              Trend.YEARLY_UP}
 DOWN_LABELS = CANDIDATE_LABELS - UP_LABELS
 
+# Ürün katkısı tonu (3. soru): etikete göre Python belirler; model kendi cümlesiyle yazar.
+ONERI = {
+    Trend.ABOVE_SEASON_UP: "öne çıkarmayı destekleyebilir; ilgi geçen yılın aynı döneminin de üzerinde",
+    Trend.SEASONAL_UP: "sezon ürünü olarak öne çıkarmayı destekleyebilir; bu artış her yıl görülen mevsimsel bir "
+                       "artış",
+    Trend.SEASONAL_UP_WEAKER: "sezon ürünü olarak öne çıkarmayı destekleyebilir; ancak ilgi geçen yılın aynı "
+                              "döneminden düşük",
+    Trend.UP_YOY_UNKNOWN: "ihtiyatla öne çıkarmayı destekleyebilir; geçen yılla karşılaştırılamadığı için kalıcı "
+                          "olup olmadığı bilinmiyor",
+    Trend.YEARLY_UP: "ilgi izlenmeli; yakın dönemde belirgin artış yok ama ilgi geçen yılın aynı döneminden yüksek",
+    Trend.ABOVE_SEASON_DOWN: "öne çıkarmak için erken; ilgi azalıyor ve geçen yılın aynı döneminden de düşük",
+    Trend.SEASONAL_DOWN: "öne çıkarmak için erken; ilgi her yıl görülen mevsimsel bir düşüşte",
+    Trend.SEASONAL_DOWN_STRONGER: "öne çıkarmak için erken; ilgi azalıyor ama geçen yılın aynı döneminden yüksek",
+    Trend.DOWN_YOY_UNKNOWN: "öne çıkarmak için erken; ilgi azalıyor",
+    Trend.YEARLY_DOWN: "ilgi izlenmeli; yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden düşük",
+}
+
 
 def direction_tr(label: str) -> str:
     if label == Trend.YEARLY_DOWN:
         return "geçen yıldan düşük"
+    if label == Trend.YEARLY_UP:
+        return "geçen yıldan yüksek"
     return "yükseliyor" if label in UP_LABELS else "düşüyor"
 
 
@@ -193,7 +258,8 @@ def candidate_line(r: dict, names: dict) -> str:
     y = f", yıllık {_pct(r['yoy_pct_change'])}" if r.get("yoy_pct_change") is not None else ""
     return (f"- terim: {r['label']} | kaynak: {names.get(r['source'], r['source'])} | "
             f"ETİKET: {TREND_TR[r['trend_label']]} | YÖN: {direction_tr(r['trend_label'])} | "
-            f"ANLAMI: {MEANING[r['trend_label']]} | dönemsel {_pct(r.get('pct_change'))}{y}")
+            f"ANLAMI: {MEANING[r['trend_label']]} | ÖNERİ: {ONERI[r['trend_label']]} | "
+            f"dönemsel {_pct(r.get('pct_change'))}{y}")
 
 
 def limitations(rows: list[dict], names: dict) -> list[str]:
@@ -205,8 +271,9 @@ def limitations(rows: list[dict], names: dict) -> list[str]:
         nm = names.get(src, src)
         weak = [r for r in rs if r.get("signal") == Signal.WEAK]
         if weak:
-            means = [m for r in weak for m in (r.get("baseline_mean"), r.get("recent_mean")) if m is not None]
-            rng = f" (günlük ortalama {_num(min(means))}–{_num(max(means))})" if means else ""
+            # Hacim ham değerle anlatılır (normalize edilmiş pay değil); eski analizlerde ham alan yoksa yazılmaz.
+            means = [m for r in weak for m in (r.get("baseline_raw_mean"), r.get("recent_raw_mean")) if m is not None]
+            rng = (f" (günlük ortalama {_num(min(means))}–{_num(max(means))} {raw_unit(src)})" if means else "")
             out.append(f"{nm}: {', '.join(r['label'] for r in weak)} için hacim çok düşük{rng}; "
                        "değişimler güvenilir değil.")
         reasons: dict[str, list[str]] = defaultdict(list)
@@ -236,11 +303,11 @@ def limitations(rows: list[dict], names: dict) -> list[str]:
 
 
 def build_user_prompt(rows: list[dict], context: dict) -> str:
-    """context: brand, window, sources (anahtar -> {display, description}), flat_threshold_pct."""
+    """context: brand, window, sources (anahtar -> {display, description}; sıra = öncelik), flat_threshold_pct."""
     w = context["window"]
     thr = context.get("flat_threshold_pct", 15)
     names = {k: v["display"] for k, v in context["sources"].items()}
-    cands = candidates(rows)
+    cands = candidates(rows, list(names))
     other = [r for r in rows if r not in cands]
     ly = f" | Geçen yılın aynı dönemi: {_d(w['ly_start'])}–{_d(w['ly_end'])}" if w.get("ly_start") else ""
     parts = [
@@ -250,15 +317,16 @@ def build_user_prompt(rows: list[dict], context: dict) -> str:
         f"Yakın dönem: {_d(w['recent_start'])}–{_d(w['recent_end'])}{ly}",
         f"Yöntem: dönemsel = yakın dönem ({_ndays(w['recent_start'], w['recent_end'])} gün) ↔ önceki dönem "
         f"({_ndays(w['baseline_start'], w['baseline_end'])} gün); yıllık = yakın dönem ↔ geçen yılın aynı dönemi. "
-        f"±%{thr:g} içindeki değişimler 'belirgin değişim yok' sayıldı; düşük hacimli seriler güvenilir sayılmadı.",
+        f"±%{thr:g} içindeki ya da günlük dalgalanmaya göre anlamlı olmayan değişimler 'belirgin değişim yok' "
+        "sayıldı; düşük hacimli seriler güvenilir sayılmadı.",
         "",
         "KAYNAKLAR:",
         *[f"- {v['display']}: {v['description']}" for v in context["sources"].values()],
         "",
-        "ADAY LİSTESİ (one_cikanlar yalnızca bunlardan seçilir):",
+        "ADAY LİSTESİ (one_cikanlar yalnızca bunlardan seçilir; her terim için tek aday):",
         "\n".join(candidate_line(r, names) for r in cands) or "- (aday yok)",
         "",
-        "ADAY OLMAYANLAR (öne çıkan sayılmaz):",
+        "DİĞER SONUÇLAR (aday değil, öne çıkan sayılmaz; yalnızca bağlam):",
         "\n".join(f"- {r['label']} | {names.get(r['source'], r['source'])} | "
                   f"{TREND_TR.get(r.get('trend_label'), '-')}" for r in other) or "- (yok)",
         "",

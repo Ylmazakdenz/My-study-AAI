@@ -145,6 +145,20 @@ Görev belgesi teslimat açısından satır satır yeniden karşılaştırıldı
 | "Bağımlılık listesi" | `requirements.txt` yalnız `-e .` | Paketler açıkça listelenir; pyproject ile uyum testle denetlenir |
 | "Yapay zekâdan alınmış plan değil" | README'de "Sonraki aşamaya köprü" planı | Kaldırıldı |
 
+## K17 — 20.11 gerçek çalıştırmasından çıkan düzeltmeler (v0.3.2)
+
+36/36 istek başarılı oldu; analiz doğruydu ama model yorumu ve rapor metni şu sorunları gösterdi:
+
+| Denenen işlem / gözlem | Sorun | Çözüm |
+|---|---|---|
+| Aday listesi terim-kaynak çiftiydi | Kazak, Palto, Bot hem Google Trends hem İngilizce Vikipedi'den aday oldu (9 aday); model terimleri ve önerileri tekrarladı, istem uzadı (294 sn) | Terim başına tek aday: config'teki kaynak sırasına göre önceliği en yüksek kaynak; diğerleri bağlam. Tekrar denetlenir, rapor tekrarı atar |
+| Model etiketleri karıştırdı | Bot (geçen yıldan yüksek) için "sezon üstü", Kazak (sezon üstü) için "mevsimsel artış", her öneriye "mevsimsel artışlar her yıl görülür" | Etiket ifadesi denetimi (`checks.label_phrase_issues`); öneri tonu (`ÖNERİ`) Python'da belirlenir |
+| Oranlanmış Vikipedi değerleri | Raporda birimsiz "günlük ortalama 1,0 → 1,3" (aslında kaynak toplamında milyonda pay) | Kanıt satırında ve tabloda birim yazılır (`value_unit`) |
+| Düşük hacim notu | Aralık oranlanmış paydan yazıldı ("0,5–2,8") | Ham ortalamalar saklanır (`baseline_raw_mean`, `recent_raw_mean`); not ham görüntüleme sayısıyla yazılır |
+
+Hesaplanan sonuçlar (değişim yüzdeleri, sinyaller, etiketler) değişmedi; örnek çalıştırmalar yeniden analiz edilip
+karşılaştırıldı. Gerçek yanıt `tests/test_run_20261120.py`'de regresyon testi olarak tutulur.
+
 ## K9 — Ayar dosyası şemayla doğrulanır (19.11)
 
 Yazım hataları (ör. `recent_day`, var olmayan kaynak adı, kaynağa ait olmayan ayar) eskiden sessizce görmezden

@@ -94,7 +94,7 @@ def test_prompt_groups_and_reasons():
         r.update({k: v for k, v in _ctx()["window"].items()})
         r["trend_label"] = trend_label(r["signal"], None)
     p = build_user_prompt(rows, _ctx())
-    assert "ADAY LİSTESİ (one_cikanlar yalnızca bunlardan seçilir):\n- (aday yok)" in p   # Kazak düşük hacimli
+    assert "seçilir; her terim için tek aday):\n- (aday yok)" in p   # Kazak düşük hacimli
     limits = p.split("SINIRLAR")[1]
     assert "Türkçe Vikipedi: Kazak, Kot pantolon, Palto, Trençkot için hacim çok düşük" in limits
     assert "GDELT haberleri: Trençkot — kaynak zamanında yanıt vermedi" in limits

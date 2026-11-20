@@ -1,0 +1,188 @@
+{
+  "model": "llama3.1:8b",
+  "temperature": 0.2,
+  "created_at": "2026-11-20T18:58:39+00:00",
+  "run_id": "20261120-212027",
+  "window": {
+    "baseline_start": "2026-09-24",
+    "baseline_end": "2026-10-21",
+    "recent_start": "2026-10-22",
+    "recent_end": "2026-11-18",
+    "ly_start": "2025-10-23",
+    "ly_end": "2025-11-19"
+  },
+  "environment": {
+    "trendpipe": "0.3.3",
+    "git_commit": "ebacef5",
+    "git_dirty": true,
+    "python": "3.13.0rc3",
+    "platform": "macOS-27.2.1",
+    "packages": {
+      "requests": "2.34.2",
+      "pytrends": "4.9.2",
+      "pandas": "3.1.1",
+      "pydantic": "2.14.3",
+      "ollama": "0.6.3",
+      "PyYAML": "6.0.3"
+    }
+  },
+  "elapsed_sec": 130.57,
+  "review": {
+    "ok": true,
+    "issues": [],
+    "structural_issues": [],
+    "unmatched_percentages": [],
+    "note": "Yanıt hesaplanan sonuçlarla tutarlı."
+  },
+  "chosen_attempt": 1,
+  "response": {
+    "ozet": "Palto, Kazak, Bot / Çizme, Hırka ve Trençkot trend analizi",
+    "one_cikanlar": [
+      {
+        "terim": "Palto",
+        "kaynak": "Google Trends",
+        "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış",
+        "dayanak": "Google Trends, yakın dönemde önceki döneme göre %72,1 arttı, yıllık %33,1 arttı"
+      },
+      {
+        "terim": "Kazak",
+        "kaynak": "Google Trends",
+        "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış",
+        "dayanak": "Google Trends, yakın dönemde önceki döneme göre %28,6 arttı, yıllık %15,7 arttı"
+      },
+      {
+        "terim": "Bot / Çizme",
+        "kaynak": "Google Trends",
+        "neden_onemli": "Geçen yılın aynı döneminden yüksek. Yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden yüksek",
+        "dayanak": "Google Trends, yakın dönemde önceki döneme göre %15,7 arttı, yıllık %65,3 arttı"
+      },
+      {
+        "terim": "Hırka",
+        "kaynak": "İngilizce Vikipedi",
+        "neden_onemli": "Yakın dönemde arttı ve geçen yılın aynı döneminden benzer düzeyde. Mevsimsel artış",
+        "dayanak": "İngilizce Vikipedi, yakın dönemde %30,5 arttı, yıllık %12,4 arttı"
+      },
+      {
+        "terim": "Trençkot",
+        "kaynak": "Google Trends",
+        "neden_onemli": "Yakın dönemde azaldı ve geçen yılın aynı döneminden benzer düzeyde. Mevsimsel düşüş",
+        "dayanak": "Google Trends, yakın dönemde %40,4 azaldı, yıllık %1,4 azaldı"
+      }
+    ],
+    "urun_katkisi": [
+      {
+        "terim": "Palto",
+        "oneri": "Palto, ilgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış"
+      },
+      {
+        "terim": "Kazak",
+        "oneri": "Kazak, ilgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış"
+      },
+      {
+        "terim": "Bot / Çizme",
+        "oneri": "Bot / Çizme, ilgi izlenmeli. Yakın dönemde belirgin artış yok ama ilgi geçen yılın aynı döneminden yüksek"
+      },
+      {
+        "terim": "Hırka",
+        "oneri": "Hırka, sezon ürünü olarak öne çıkarmayı destekleyebilir. Bu artış her yıl görülen mevsimsel bir artış"
+      },
+      {
+        "terim": "Trençkot",
+        "oneri": "Trençkot, ilgi her yıl görülen mevsimsel bir düşüşte"
+      }
+    ],
+    "soyleyemediklerimiz": [
+      "Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir; yalnızca aynı terimin dönemleri karşılaştırılabilir.",
+      "İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.",
+      "Veriler arama ilgisi ve bilgi merakını ölçer; satış, stok, fiyat veya tüketici talebi hakkında bilgi içermez.",
+      "Yıllık karşılaştırma tek bir önceki yıla dayanır; uzun vadeli eğilim için daha fazla yıl gerekir."
+    ]
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "raw": "{ \"ozet\": \"Palto, Kazak, Bot / Çizme, Hırka ve Trençkot trend analizi\",\n  \"one_cikanlar\": [\n    { \"terim\": \"Palto\", \"kaynak\": \"Google Trends\", \"neden_onemli\": \"Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış\", \"dayanak\": \"Google Trends, yakın dönemde önceki döneme göre %72,1 arttı, yıllık %33,1 arttı\" },\n    { \"terim\": \"Kazak\", \"kaynak\": \"Google Trends\", \"neden_onemli\": \"Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış\", \"dayanak\": \"Google Trends, yakın dönemde önceki döneme göre %28,6 arttı, yıllık %15,7 arttı\" },\n    { \"terim\": \"Bot / Çizme\", \"kaynak\": \"Google Trends\", \"neden_onemli\": \"Geçen yılın aynı döneminden yüksek. Yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden yüksek\", \"dayanak\": \"Google Trends, yakın dönemde önceki döneme göre %15,7 arttı, yıllık %65,3 arttı\" },\n    { \"terim\": \"Hırka\", \"kaynak\": \"İngilizce Vikipedi\", \"neden_onemli\": \"Yakın dönemde arttı ve geçen yılın aynı döneminden benzer düzeyde. Mevsimsel artış\", \"dayanak\": \"İngilizce Vikipedi, yakın dönemde %30,5 arttı, yıllık %12,4 arttı\" },\n    { \"terim\": \"Trençkot\", \"kaynak\": \"Google Trends\", \"neden_onemli\": \"Yakın dönemde azaldı ve geçen yılın aynı döneminden benzer düzeyde. Mevsimsel düşüş\", \"dayanak\": \"Google Trends, yakın dönemde %40,4 azaldı, yıllık %1,4 azaldı\" }\n  ],\n  \"urun_katkisi\": [\n    { \"terim\": \"Palto\", \"oneri\": \"Palto, ilgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış\" },\n    { \"terim\": \"Kazak\", \"oneri\": \"Kazak, ilgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış\" },\n    { \"terim\": \"Bot / Çizme\", \"oneri\": \"Bot / Çizme, ilgi izlenmeli. Yakın dönemde belirgin artış yok ama ilgi geçen yılın aynı döneminden yüksek\" },\n    { \"terim\": \"Hırka\", \"oneri\": \"Hırka, sezon ürünü olarak öne çıkarmayı destekleyebilir. Bu artış her yıl görülen mevsimsel bir artış\" },\n    { \"terim\": \"Trençkot\", \"oneri\": \"Trençkot, ilgi her yıl görülen mevsimsel bir düşüşte\" }\n  ],\n  \"soyleyemediklerimiz\": [\n    \"Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir; yalnızca aynı terimin dönemleri karşılaştırılabilir.\",\n    \"İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.\",\n    \"Veriler arama ilgisi ve bilgi merakını ölçer; satış, stok, fiyat veya tüketici talebi hakkında bilgi içermez.\",\n    \"Yıllık karşılaştırma tek bir önceki yıla dayanır; uzun vadeli eğilim için daha fazla yıl gerekir.\"\n  ]\n}",
+      "data": {
+        "ozet": "Palto, Kazak, Bot / Çizme, Hırka ve Trençkot trend analizi",
+        "one_cikanlar": [
+          {
+            "terim": "Palto",
+            "kaynak": "Google Trends",
+            "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış",
+            "dayanak": "Google Trends, yakın dönemde önceki döneme göre %72,1 arttı, yıllık %33,1 arttı"
+          },
+          {
+            "terim": "Kazak",
+            "kaynak": "Google Trends",
+            "neden_onemli": "Yakın dönemde önceki döneme göre arttı ve geçen yılın aynı döneminden yüksek. Sezon üstü artış",
+            "dayanak": "Google Trends, yakın dönemde önceki döneme göre %28,6 arttı, yıllık %15,7 arttı"
+          },
+          {
+            "terim": "Bot / Çizme",
+            "kaynak": "Google Trends",
+            "neden_onemli": "Geçen yılın aynı döneminden yüksek. Yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden yüksek",
+            "dayanak": "Google Trends, yakın dönemde önceki döneme göre %15,7 arttı, yıllık %65,3 arttı"
+          },
+          {
+            "terim": "Hırka",
+            "kaynak": "İngilizce Vikipedi",
+            "neden_onemli": "Yakın dönemde arttı ve geçen yılın aynı döneminden benzer düzeyde. Mevsimsel artış",
+            "dayanak": "İngilizce Vikipedi, yakın dönemde %30,5 arttı, yıllık %12,4 arttı"
+          },
+          {
+            "terim": "Trençkot",
+            "kaynak": "Google Trends",
+            "neden_onemli": "Yakın dönemde azaldı ve geçen yılın aynı döneminden benzer düzeyde. Mevsimsel düşüş",
+            "dayanak": "Google Trends, yakın dönemde %40,4 azaldı, yıllık %1,4 azaldı"
+          }
+        ],
+        "urun_katkisi": [
+          {
+            "terim": "Palto",
+            "oneri": "Palto, ilgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış"
+          },
+          {
+            "terim": "Kazak",
+            "oneri": "Kazak, ilgi geçen yılın aynı döneminin de üzerinde. Sezon üstü artış"
+          },
+          {
+            "terim": "Bot / Çizme",
+            "oneri": "Bot / Çizme, ilgi izlenmeli. Yakın dönemde belirgin artış yok ama ilgi geçen yılın aynı döneminden yüksek"
+          },
+          {
+            "terim": "Hırka",
+            "oneri": "Hırka, sezon ürünü olarak öne çıkarmayı destekleyebilir. Bu artış her yıl görülen mevsimsel bir artış"
+          },
+          {
+            "terim": "Trençkot",
+            "oneri": "Trençkot, ilgi her yıl görülen mevsimsel bir düşüşte"
+          }
+        ],
+        "soyleyemediklerimiz": [
+          "Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir; yalnızca aynı terimin dönemleri karşılaştırılabilir.",
+          "İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.",
+          "Veriler arama ilgisi ve bilgi merakını ölçer; satış, stok, fiyat veya tüketici talebi hakkında bilgi içermez.",
+          "Yıllık karşılaştırma tek bir önceki yıla dayanır; uzun vadeli eğilim için daha fazla yıl gerekir."
+        ]
+      },
+      "review": {
+        "ok": true,
+        "issues": [],
+        "structural_issues": [],
+        "unmatched_percentages": [],
+        "note": "Yanıt hesaplanan sonuçlarla tutarlı."
+      },
+      "elapsed_sec": 130.57
+    }
+  ],
+  "prompt": [
+    {
+      "role": "system",
+      "content": "Sen bir giyim markasının trend analistisin. Sana Python ile hesaplanmış ölçümler ve bir ADAY LİSTESİ\nveriliyor. Yanıtını YALNIZCA verilen JSON şemasına uygun, Türkçe olarak ver.\n\nKURALLAR:\n1. \"one_cikanlar\" içine YALNIZCA ADAY LİSTESİ'ndeki terim-kaynak çiftlerini yaz; terim ve kaynak adlarını listede\n   yazıldığı gibi kopyala. Her terim en fazla bir kez yazılır. Aday listesi boşsa \"one_cikanlar\" ve\n   \"urun_katkisi\" boş liste olsun.\n2. \"neden_onemli\": adayın ANLAMI alanını kendi cümlenle yaz. ANLAMI'nda olmayan bir şey söyleme; özellikle geçen\n   yılla ilgili ifadeyi ANLAMI'nda yazdığı gibi kullan (geçen yıldan yüksek / benzer / düşük).\n   Etiket ifadelerini yalnızca o etiketi taşıyan terim için kullan: \"sezon üstü\" yalnızca ETİKET'i sezon üstü\n   olan terim için; \"mevsimsel\" ve \"her yıl görülen\" yalnızca ETİKET'inde \"mevsimsel\" geçen terim için.\n   Yeni sayı yazma; sayı yazacaksan yalnızca aday satırındaki yüzdeleri aynen kullan.\n3. \"dayanak\" (destekleyen ölçüm ve dönem): kaynağı, karşılaştırılan dönemleri (tarihleriyle) ve yüzde değişimi\n   yaz. Yalnızca aday satırındaki yüzdeleri ve yukarıda verilen dönem tarihlerini aynen kullan.\n4. \"urun_katkisi\": her öne çıkan terim için TEK bir madde; adayın ÖNERİ alanını kendi cümlenle yaz, başka bir\n   şey ekleme. YÖN \"düşüyor\" ya da \"geçen yıldan düşük\" ise \"öne çıkar\" DEME.\n5. Satış, stok, ciro, sipariş, fiyat veya tüketici talebi hakkında hiçbir şey söyleme; bu bilgiler veride yok.\n6. Kaynakları birbiriyle sayısal olarak karşılaştırma; her kaynak farklı bir şey ölçer.\n7. \"soyleyemediklerimiz\": SINIRLAR listesindeki en önemli 3-5 maddeyi kendi cümlelerinle yaz; her madde listede\n   ayrı bir öğe olsun. Veri yetersizse bunu açıkça yaz.\n8. \"ozet\": en fazla 2 cümle. Tamamen Türkçe yaz; İngilizce kelime kullanma.\n"
+    },
+    {
+      "role": "user",
+      "content": "Marka: Örnek Giyim Markası | Pazar: TR | Sezon: 2026-2027 Sonbahar/Kış\nÖnceki dönem: 24.09.2026–21.10.2026 | Yakın dönem: 22.10.2026–18.11.2026 | Geçen yılın aynı dönemi: 23.10.2025–19.11.2025\nYöntem: dönemsel = yakın dönem (28 gün) ↔ önceki dönem (28 gün); yıllık = yakın dönem ↔ geçen yılın aynı dönemi. ±%15 içindeki ya da günlük dalgalanmaya göre anlamlı olmayan değişimler 'belirgin değişim yok' sayıldı; düşük hacimli seriler güvenilir sayılmadı.\n\nKAYNAKLAR:\n- Google Trends: Google aramalarında terime duyulan göreli ilgi (TR; 0-100, her terim kendi dönemindeki zirvesine göre ölçeklenir). Arama ilgisini gösterir; arama sayısı veya satış değildir.\n- Türkçe Vikipedi: Türkçe Vikipedi (tr.wikipedia) makalesinin günlük görüntülenme sayısı, botlar hariç (Türkçe okuyucular). Bir ürün tipine duyulan bilgi merakını gösterir; satın alma niyeti veya satış değildir.\n- İngilizce Vikipedi: İngilizce Vikipedi (en.wikipedia) makalesinin günlük görüntülenme sayısı, botlar hariç (dünya geneli okuyucular). Bir ürün tipine duyulan bilgi merakını gösterir; satın alma niyeti veya satış değildir.\n\nADAY LİSTESİ (one_cikanlar yalnızca bunlardan seçilir; her terim için tek aday):\n- terim: Palto | kaynak: Google Trends | ETİKET: sezon üstü artış | YÖN: yükseliyor | ANLAMI: yakın dönemde önceki döneme göre arttı VE geçen yılın aynı döneminden yüksek | ÖNERİ: öne çıkarmayı destekleyebilir; ilgi geçen yılın aynı döneminin de üzerinde | dönemsel %+72,1, yıllık %+33,1\n- terim: Kazak | kaynak: Google Trends | ETİKET: sezon üstü artış | YÖN: yükseliyor | ANLAMI: yakın dönemde önceki döneme göre arttı VE geçen yılın aynı döneminden yüksek | ÖNERİ: öne çıkarmayı destekleyebilir; ilgi geçen yılın aynı döneminin de üzerinde | dönemsel %+28,6, yıllık %+15,7\n- terim: Bot / Çizme | kaynak: Google Trends | ETİKET: geçen yıla göre yüksek (son dönemde sabit) | YÖN: geçen yıldan yüksek | ANLAMI: yakın dönemde belirgin değişim yok; geçen yılın aynı döneminden yüksek | ÖNERİ: ilgi izlenmeli; yakın dönemde belirgin artış yok ama ilgi geçen yılın aynı döneminden yüksek | dönemsel %+15,7, yıllık %+65,3\n- terim: Hırka | kaynak: İngilizce Vikipedi | ETİKET: mevsimsel artış (geçen yılla benzer düzey) | YÖN: yükseliyor | ANLAMI: yakın dönemde arttı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel artış) | ÖNERİ: sezon ürünü olarak öne çıkarmayı destekleyebilir; bu artış her yıl görülen mevsimsel bir artış | dönemsel %+30,5, yıllık %+12,4\n- terim: Kot pantolon | kaynak: İngilizce Vikipedi | ETİKET: geçen yıla göre düşük (son dönemde sabit) | YÖN: geçen yıldan düşük | ANLAMI: yakın dönemde belirgin değişim yok; geçen yılın aynı döneminden düşük | ÖNERİ: ilgi izlenmeli; yakın dönemde belirgin değişim yok ama ilgi geçen yılın aynı döneminden düşük | dönemsel %+2,5, yıllık %-55,1\n- terim: Trençkot | kaynak: Google Trends | ETİKET: mevsimsel düşüş (geçen yılla benzer düzey) | YÖN: düşüyor | ANLAMI: yakın dönemde azaldı; geçen yılın aynı dönemiyle benzer düzeyde (her yıl görülen mevsimsel düşüş) | ÖNERİ: öne çıkarmak için erken; ilgi her yıl görülen mevsimsel bir düşüşte | dönemsel %-40,4, yıllık %-1,4\n\nDİĞER SONUÇLAR (aday değil, öne çıkan sayılmaz; yalnızca bağlam):\n- Hırka | Google Trends | belirgin değişim yok\n- Kot pantolon | Google Trends | belirgin değişim yok\n- Trençkot | Türkçe Vikipedi | düşük hacim — güvenilir değil\n- Palto | Türkçe Vikipedi | düşük hacim — güvenilir değil\n- Hırka | Türkçe Vikipedi | düşük hacim — güvenilir değil\n- Kazak | Türkçe Vikipedi | düşük hacim — güvenilir değil\n- Kot pantolon | Türkçe Vikipedi | düşük hacim — güvenilir değil\n- Bot / Çizme | Türkçe Vikipedi | düşük hacim — güvenilir değil\n- Trençkot | İngilizce Vikipedi | belirgin değişim yok\n- Palto | İngilizce Vikipedi | mevsimsel artış (geçen yılla benzer düzey)\n- Kazak | İngilizce Vikipedi | mevsimsel artış (geçen yılla benzer düzey)\n- Bot / Çizme | İngilizce Vikipedi | geçen yıla göre düşük (son dönemde sabit)\n\nSINIRLAR:\n- Türkçe Vikipedi: Trençkot, Palto, Hırka, Kazak, Kot pantolon, Bot / Çizme için hacim çok düşük (günlük ortalama 1,4–7,7 görüntüleme); değişimler güvenilir değil.\n- Google Trends değerleri her terim için kendi zirvesine göre 0-100 arasında ölçeklenir; yalnızca aynı terimin dönemleri karşılaştırılabilir. Google aramaların bir örneklemini kullandığı için aynı sorgu tekrarlandığında değerler biraz değişebilir.\n- İngilizce Vikipedi dünya geneli ilgiyi gösterir; Türkiye'ye özgü değildir.\n- Veriler arama ilgisi ve bilgi merakını ölçer; satış, stok, fiyat veya tüketici talebi hakkında bilgi içermez.\n- Yıllık karşılaştırma tek bir önceki yıla dayanır; uzun vadeli eğilim için daha fazla yıl gerekir."
+    }
+  ]
+}

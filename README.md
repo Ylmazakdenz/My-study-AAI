@@ -49,12 +49,16 @@ Aynı veri (kaynak + ayarlar + sorgu + dönem) **24 saat** içinde kaynaktan tek
 terminalde `[ÖNB]` ile, kayıtta ilk çekilme zamanıyla işaretlenir. Yalnızca eksiksiz başarılı yanıtlar saklanır;
 süresi dolan kayıtlar her çalıştırmanın başında diskten silinir.
 
-Bağlantı olmadan, repodaki gerçek örnek veriyle:
+Bağlantı olmadan, repodaki gerçek örnek veriyle (örnek klasör bozulmasın diye önce `data/runs/`'a kopyalanır):
 
 ```bash
-trendpipe analyze   --out-dir data/sample --run latest
-trendpipe interpret --out-dir data/sample --run latest
+mkdir -p data/runs && cp -r data/sample/20261120-212027 data/runs/
+trendpipe analyze   --out-dir data/runs --run 20261120-212027
+trendpipe interpret --out-dir data/runs --run 20261120-212027
 ```
+
+**Örnek sonuç:** [data/sample/20261120-212027/interpretation.md](data/sample/20261120-212027/interpretation.md)
+(20.11.2026, 36/36 istek başarılı, `llama3.1:8b` yorumu, tutarlılık kontrolü ✅).
 
 `trendpipe` yerine `python -m trendpipe` da kullanılabilir.
 
